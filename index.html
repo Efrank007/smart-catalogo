@@ -708,7 +708,10 @@ async function enviarPedido(){
         fecha
       })
     });
-    const data = await res.json();
+    let data;
+    try { data = await res.json(); } catch(je) { data = {}; }
+    // Show full response in console for diagnosis
+    console.log('Web3Forms status:', res.status, 'response:', JSON.stringify(data));
     if(res.ok && data.success){
       document.getElementById('mp-body').innerHTML=`
         <div style="text-align:center;padding:20px 0">
