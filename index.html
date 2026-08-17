@@ -314,7 +314,8 @@ input,select{font-family:inherit;font-size:14px}
 
 <script>
 const CFG = {
-  FORMSPREE: "https://formspree.io/f/mgawnonw",
+  // Web3Forms — reemplazá con tu Access Key de web3forms.com
+  W3F_KEY: "0adc85f0-a1e4-4290-89e4-93f9b048a852",
   FECHA_LISTA: "05/08/2026",
   NOMBRE: "S&MART"
 };
@@ -687,14 +688,22 @@ async function enviarPedido(){
   const fecha=new Date().toLocaleString('es-AR');
   const msg=`NUEVO PEDIDO S&MART\n${'='.repeat(40)}\nFecha: ${fecha}\nCódigo cliente: ${clienteData.codigo}\nRazón social: ${clienteData.razon}\nDirección: ${clienteData.direccion}\nTeléfono: ${clienteData.telefono}\nEmail cliente: ${clienteData.email||'No informado'}\n\nPRODUCTOS:\n${detalle}\n\nTOTAL ESTIMADO: ${fmt(total)}\nObservaciones: ${obs||'Ninguna'}`;
   try{
-    const res=await fetch(CFG.FORMSPREE,{
+    const res=await fetch('https://api.web3forms.com/submit',{
       method:'POST',
       headers:{'Content-Type':'application/json','Accept':'application/json'},
       body:JSON.stringify({
-        _subject:`🛒 Pedido S&MART — ${clienteData.codigo} — ${clienteData.razon}`,
-        pedido:msg,codigo_cliente:clienteData.codigo,razon_social:clienteData.razon,
-        direccion:clienteData.direccion,telefono:clienteData.telefono,
-        email_cliente:clienteData.email||'',total:fmt(total),articulos:items.length,fecha
+        access_key: CFG.W3F_KEY,
+        subject:`🛒 Pedido S&MART — ${clienteData.codigo} — ${clienteData.razon}`,
+        from_name: `S&MART Catálogo`,
+        pedido:msg,
+        codigo_cliente:clienteData.codigo,
+        razon_social:clienteData.razon,
+        direccion:clienteData.direccion,
+        telefono:clienteData.telefono,
+        email_cliente:clienteData.email||'',
+        total:fmt(total),
+        articulos:items.length,
+        fecha
       })
     });
     if(res.ok){
@@ -728,12 +737,4 @@ function cerrarModal(id){document.getElementById(id).classList.remove('open');}
 document.querySelectorAll('.overlay').forEach(o=>
   o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('open');}));
 let toastT;
-function showToast(msg){
-  const t=document.getElementById('toast');
-  t.textContent=msg;t.classList.add('show');
-  clearTimeout(toastT);
-  toastT=setTimeout(()=>t.classList.remove('show'),2600);
-}
-</script>
-</body>
-</html>
+function show
