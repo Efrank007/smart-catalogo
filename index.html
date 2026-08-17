@@ -693,9 +693,10 @@ async function enviarPedido(){
       headers:{'Content-Type':'application/json','Accept':'application/json'},
       body:JSON.stringify({
         access_key: CFG.W3F_KEY,
-        subject:`🛒 Pedido S&MART — ${clienteData.codigo} — ${clienteData.razon}`,
-        from_name: `S&MART Catálogo`,
-        to: `eugedinatale@gmail.com`,
+        subject:`Pedido SMART — ${clienteData.codigo} — ${clienteData.razon}`,
+        from_name: `SMART Catalogo`,
+        email: `eugedinatale@gmail.com`,
+        botcheck: false,
         pedido:msg,
         codigo_cliente:clienteData.codigo,
         razon_social:clienteData.razon,
@@ -707,7 +708,8 @@ async function enviarPedido(){
         fecha
       })
     });
-    if(res.ok){
+    const data = await res.json();
+    if(res.ok && data.success){
       document.getElementById('mp-body').innerHTML=`
         <div style="text-align:center;padding:20px 0">
           <div style="font-size:52px;margin-bottom:12px">✅</div>
