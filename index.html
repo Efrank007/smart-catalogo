@@ -695,6 +695,7 @@ async function enviarPedido(){
         access_key: CFG.W3F_KEY,
         subject:`🛒 Pedido S&MART — ${clienteData.codigo} — ${clienteData.razon}`,
         from_name: `S&MART Catálogo`,
+        to: `eugedinatale@gmail.com`,
         pedido:msg,
         codigo_cliente:clienteData.codigo,
         razon_social:clienteData.razon,
@@ -737,4 +738,12 @@ function cerrarModal(id){document.getElementById(id).classList.remove('open');}
 document.querySelectorAll('.overlay').forEach(o=>
   o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('open');}));
 let toastT;
-function show
+function showToast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('show');
+  clearTimeout(toastT);
+  toastT=setTimeout(()=>t.classList.remove('show'),2600);
+}
+</script>
+</body>
+</html>
