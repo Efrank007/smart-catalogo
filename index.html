@@ -20,9 +20,8 @@ input,select{font-family:inherit;font-size:14px}
 
 #comprobante-print{display:none}
 @media print{
-  body *{visibility:hidden}
-  #comprobante-print, #comprobante-print *{visibility:visible}
-  #comprobante-print{display:block;position:absolute;top:0;left:0;width:100%;padding:24px}
+  body > *:not(#comprobante-print){display:none !important}
+  #comprobante-print{display:block !important;position:static;width:100%;padding:24px}
   #comprobante-print .cp-header{display:flex;justify-content:space-between;align-items:baseline;
     border-bottom:2px solid #1A3A5C;padding-bottom:10px;margin-bottom:16px}
   #comprobante-print .cp-header h1{font-size:22px;color:#1A3A5C}
