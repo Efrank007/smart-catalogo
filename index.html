@@ -700,8 +700,9 @@ async function enviarPedido(){
   btn.disabled=true;
   btn.innerHTML='<span class="spinner"></span>Enviando...';
   const totalUnidades=items.reduce((s,i)=>s+i.cantidad,0);
-  const pad=(s,n)=>{s=String(s);return s.length>n?s.slice(0,n-1)+'…':s.padEnd(n);};
-  const padL=(s,n)=>String(s).padStart(n);
+  const NBSP='\u00A0';
+  const pad=(s,n)=>{s=String(s);return s.length>n?s.slice(0,n-1)+'…':s.padEnd(n,NBSP);};
+  const padL=(s,n)=>String(s).padStart(n,NBSP);
   const headerRow=`${pad('CÓDIGO',8)} ${pad('PRODUCTO',36)} ${padL('CANT',5)} ${padL('UNIT.',11)} ${padL('SUBTOTAL',12)}`;
   const sepRow='-'.repeat(headerRow.length);
   const detalle=items.map(({producto:p,cantidad})=>
