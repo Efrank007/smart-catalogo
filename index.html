@@ -699,11 +699,16 @@ async function enviarPedido(){
   const obs=document.getElementById('obs').value;
   btn.disabled=true;
   btn.innerHTML='<span class="spinner"></span>Enviando...';
+  const totalUnidades=items.reduce((s,i)=>s+i.cantidad,0);
+  const pad=(s,n)=>{s=String(s);return s.length>n?s.slice(0,n-1)+'…':s.padEnd(n);};
+  const padL=(s,n)=>String(s).padStart(n);
+  const headerRow=`${pad('CÓDIGO',8)} ${pad('PRODUCTO',36)} ${padL('CANT',5)} ${padL('UNIT.',11)} ${padL('SUBTOTAL',12)}`;
+  const sepRow='-'.repeat(headerRow.length);
   const detalle=items.map(({producto:p,cantidad})=>
-    `[${p.codigo}] ${p.descripcion} | Marca: ${p.marca} | Cant: ${cantidad} | Unit: ${fmt(p.precio)} | Sub: ${fmt(p.precio*cantidad)}`
+    `${pad('#'+p.codigo,8)} ${pad(p.descripcion,36)} ${padL(cantidad,5)} ${padL(fmt(p.precio),11)} ${padL(fmt(p.precio*cantidad),12)}`
   ).join('\n');
   const fecha=new Date().toLocaleString('es-AR');
-  const msg=`NUEVO PEDIDO S&MART\n${'='.repeat(40)}\nFecha: ${fecha}\nCódigo cliente: ${clienteData.codigo}\nRazón social: ${clienteData.razon}\nDirección: ${clienteData.direccion}\nTeléfono: ${clienteData.telefono}\nEmail cliente: ${clienteData.email||'No informado'}\n\nPRODUCTOS:\n${detalle}\n\nTOTAL ESTIMADO: ${fmt(total)}\nObservaciones: ${obs||'Ninguna'}`;
+  const msg=`NUEVO PEDIDO S&MART\n${'='.repeat(40)}\nFecha: ${fecha}\nCódigo cliente: ${clienteData.codigo}\nRazón social: ${clienteData.razon}\nDirección: ${clienteData.direccion}\nTeléfono: ${clienteData.telefono}\nEmail cliente: ${clienteData.email||'No informado'}\n\nPRODUCTOS:\n${headerRow}\n${sepRow}\n${detalle}\n${sepRow}\n\nCódigos distintos: ${items.length}\nUnidades totales: ${totalUnidades}\nTOTAL ESTIMADO: ${fmt(total)}\n\nObservaciones: ${obs||'Ninguna'}`;
   try{
     const res=await fetch('https://api.web3forms.com/submit',{
       method:'POST',
