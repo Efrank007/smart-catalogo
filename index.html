@@ -553,6 +553,10 @@ function toggleSidebar() {
       'display:flex;position:fixed;right:0;top:0;bottom:0;z-index:400;width:300px;box-shadow:-4px 0 20px rgba(0,0,0,.15)';
   }
 }
+function cerrarSidebarMobile() {
+  const sb=document.getElementById('sidebar');
+  if(window.innerWidth<=780){ sb.style.cssText='display:none'; }
+}
 
 // ── CLIENTE ──────────────────────────────────────────
 function generarCodigo(){
@@ -751,9 +755,9 @@ async function enviarPedido(){
           <button class="btn-primary" style="margin-top:14px" onclick="guardarComprobantePDF()">
             🧾 Guardar comprobante (PDF)</button>
           <button class="btn-secondary" style="margin-top:10px"
-            onclick="cerrarModal('modal-pedido');filtrar()">Hacer otro pedido</button>
+            onclick="cerrarModal('modal-pedido');cerrarSidebarMobile();filtrar()">Hacer otro pedido</button>
         </div>`;
-      carrito={};actualizarCarrito();filtrar();
+      carrito={};actualizarCarrito();filtrar();cerrarSidebarMobile();
     } else { throw new Error('Error '+res.status); }
   } catch(e){
     alertDiv.innerHTML=`<div class="alert alert-err">Error al enviar. Revisá tu conexión e intentá de nuevo.<br><small>${e.message}</small></div>`;
