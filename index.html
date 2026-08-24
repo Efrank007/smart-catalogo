@@ -234,7 +234,11 @@ input,select{font-family:inherit;font-size:14px}
   .grid{grid-template-columns:repeat(auto-fill,minmax(145px,1fr))}
   .filters{gap:8px}
   .filter-select{min-width:140px;font-size:12px}
-  .vendedor-badge{font-size:10px;padding:5px 9px;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .vendedor-badge{font-size:10px;padding:5px 9px;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;order:1}
+  .hdr-top{flex-wrap:wrap;padding:10px 12px;gap:8px}
+  .logo{order:0}
+  .hdr-actions{order:2}
+  .hdr-search{flex-basis:100%;order:3}
 }
 </style>
 </head>
@@ -588,7 +592,7 @@ function actualizarCarrito() {
 
   document.getElementById('cart-badge').textContent = nI;
   const fab=document.getElementById('fab');
-  if(fab){ fab.style.display=nI>0?'flex':'none'; document.getElementById('fab-n').textContent=nI; }
+  if(fab){ fab.style.display=(nI>0 && window.innerWidth<=780)?'flex':'none'; document.getElementById('fab-n').textContent=nI; }
 
   const sbI = document.getElementById('sb-items');
   const sbF = document.getElementById('sb-footer');
