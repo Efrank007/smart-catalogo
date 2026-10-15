@@ -838,58 +838,87 @@ function abrirModalCliente(){
       <div class="field"><label>Email * (te enviamos el pedido en PDF)</label>
         <input id="ed-email" type="email" value="${clienteData.email||''}"></div>
       <button class="btn-primary" onclick="guardarEdicion()">Guardar cambios</button>
-      <button class="btn-secondary" onclick="cerrarSesion()">Cerrar sesión / Cambiar cuenta</button>`;
+      <button class="btn-secondary" onclick="cerrarSesion()">Cambiar de cliente</button>`;
   } else {
-    tit.textContent='¿Ya tenés código?';
+    tit.textContent='Identificar cliente';
     body.innerHTML=`
-      <div class="steps"><div class="step active"></div><div class="step"></div></div>
       <p style="font-size:13px;color:var(--g5);margin-bottom:14px">
-        Si ya hiciste pedidos, ingresá tu código de 6 letras.<br>Si es tu primera vez, dejalo vacío.</p>
-      <div class="field"><label>Código de cliente (si ya tenés)</label>
-        <input id="inp-cod" placeholder="Ej: AB3X9K" maxlength="6"
-          style="text-transform:uppercase;letter-spacing:3px;font-size:18px;text-align:center">
-        <span class="field-hint">Dejá vacío si sos nuevo</span></div>
-      <button class="btn-primary" onclick="siguientePaso()">Continuar →</button>`;
+        Si ya hiciste pedidos, ingresá tu <b>código</b>, <b>email</b> o <b>teléfono</b>.</p>
+      <div class="field"><label>Código, email o teléfono</label>
+        <input id="inp-cod" placeholder="Ej: AB3X9K · tu@email.com · 351-1234567"
+          onkeydown="if(event.key==='Enter')buscarCliente()"></div>
+      <div id="bus-alert"></div>
+      <button class="btn-primary" id="btn-buscar" onclick="buscarCliente()">Buscar →</button>
+      <button class="btn-secondary" onclick="mostrarFormDatos()">Soy cliente nuevo — registrarme</button>`;
   }
   abrirModal('modal-cliente');
 }
 
-function siguientePaso(){
-  const cod=(document.getElementById('inp-cod').value||'').trim().toUpperCase();
-  if(cod&&cod.length<6){showToast('El código tiene 6 caracteres');return;}
-  mostrarFormDatos(cod||null);
+function ingresarCliente(c,msg){
+  clienteData={codigo:c.codigo,razon:c.razon,direccion:c.direccion,telefono:c.telefono,email:c.email||''};
+  guardarCliente();actualizarHdr();cerrarModal('modal-cliente');
+  showToast(msg);
 }
 
-function mostrarFormDatos(codExistente){
+async function buscarCliente(){
+  const q=(document.getElementById('inp-cod').value||'').trim();
+  const al=document.getElementById('bus-alert');
+  if(!q){al.innerHTML='<div class="alert alert-err">Ingresá un código, email o teléfono.</div>';return;}
+  const btn=document.getElementById('btn-buscar');
+  btn.disabled=true;btn.innerHTML='<span class="spinner"></span>Buscando...';
+  try{
+    const r=await fetch(URL_PEDIDOS+'?accion=cliente&q='+encodeURIComponent(q));
+    const d=await r.json();
+    if(d.ok){ingresarCliente(d.cliente,'✓ Cliente: '+d.cliente.razon+' ('+d.cliente.codigo+')');return;}
+    al.innerHTML='<div class="alert alert-err">No encontramos ese cliente. Revisá el dato o registralo como nuevo.</div>';
+  }catch(e){
+    al.innerHTML='<div class="alert alert-err">Sin conexión. Intentá de nuevo.</div>';
+  }
+  btn.disabled=false;btn.innerHTML='Buscar →';
+}
+
+function mostrarFormDatos(){
+  document.getElementById('mc-title').textContent='Cliente nuevo';
   document.getElementById('mc-body').innerHTML=`
-    <div class="steps"><div class="step done"></div><div class="step active"></div></div>
     <div class="field"><label>Razón social / Nombre completo *</label>
       <input id="nw-razon" placeholder="Ej: Distribuidora López"></div>
     <div class="field"><label>Dirección de entrega *</label>
       <input id="nw-dir" placeholder="Calle, número, localidad, provincia"></div>
     <div class="field"><label>Teléfono / WhatsApp *</label>
-      <input id="nw-tel" placeholder="Ej: 11-1234-5678" type="tel"></div>
+      <input id="nw-tel" placeholder="Ej: 351-1234567" type="tel"></div>
     <div class="field"><label>Email * (te enviamos el pedido en PDF)</label>
       <input id="nw-email" placeholder="tu@email.com" type="email"></div>
     <div id="form-alert"></div>
-    <button class="btn-primary" onclick="registrar('${codExistente||''}')">
-      ${codExistente?'Ingresar':'Registrarme y empezar a pedir'} →</button>
+    <button class="btn-primary" id="btn-reg" onclick="registrar()">Registrarme y empezar a pedir →</button>
     <button class="btn-secondary" onclick="abrirModalCliente()">← Volver</button>`;
 }
 
-function registrar(codExistente){
+async function registrar(){
   const razon=document.getElementById('nw-razon').value.trim();
   const dir=document.getElementById('nw-dir').value.trim();
   const tel=document.getElementById('nw-tel').value.trim();
   const email=document.getElementById('nw-email').value.trim();
+  const al=document.getElementById('form-alert');
   if(!razon||!dir||!tel||!emailOk(email)){
-    document.getElementById('form-alert').innerHTML=
-      '<div class="alert alert-err">Completá los campos obligatorios (*)</div>';return;
+    al.innerHTML='<div class="alert alert-err">Completá los campos obligatorios (*)</div>';return;
   }
-  clienteData={codigo:codExistente||generarCodigo(),razon,direccion:dir,telefono:tel,email,
-    alta:new Date().toLocaleDateString('es-AR')};
-  guardarCliente();actualizarHdr();cerrarModal('modal-cliente');
-  showToast('✓ Bienvenido '+razon.split(' ')[0]+'! Código: '+clienteData.codigo);
+  const btn=document.getElementById('btn-reg');
+  btn.disabled=true;btn.innerHTML='<span class="spinner"></span>Registrando...';
+  try{
+    const r=await fetch(URL_PEDIDOS,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify({accion:'registrarCliente',vendedor:vendedorActivo||'',
+        cliente:{razon,direccion:dir,telefono:tel,email}})});
+    const d=await r.json();
+    if(!d.ok)throw new Error(d.error||'Error');
+    if(d.existente){
+      ingresarCliente(d.cliente,'Ese email/teléfono ya estaba registrado: '+d.cliente.razon+' ('+d.cliente.codigo+')');
+    }else{
+      ingresarCliente(d.cliente,'✓ Bienvenido '+razon.split(' ')[0]+'! Código: '+d.cliente.codigo);
+    }
+  }catch(e){
+    al.innerHTML='<div class="alert alert-err">No se pudo registrar. Revisá tu conexión.<br><small>'+e.message+'</small></div>';
+    btn.disabled=false;btn.innerHTML='Registrarme y empezar a pedir →';
+  }
 }
 
 function guardarEdicion(){
@@ -900,11 +929,13 @@ function guardarEdicion(){
   if(!emailOk(em)){showToast('Ingresá un email válido');return;}
   clienteData.email=em;
   guardarCliente();actualizarHdr();cerrarModal('modal-cliente');
+  fetch(URL_PEDIDOS,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body:JSON.stringify({accion:'actualizarCliente',cliente:clienteData})}).catch(()=>{});
   showToast('✓ Datos actualizados');
 }
 
 function cerrarSesion(){
-  if(!confirm('¿Cerrar sesión?'))return;
+  if(!confirm('¿Cambiar de cliente?'))return;
   clienteData=null;localStorage.removeItem('smart_v2_cliente');
   actualizarHdr();cerrarModal('modal-cliente');
 }
