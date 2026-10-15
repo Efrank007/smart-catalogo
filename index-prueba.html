@@ -843,9 +843,9 @@ function abrirModalCliente(){
     tit.textContent='Identificar cliente';
     body.innerHTML=`
       <p style="font-size:13px;color:var(--g5);margin-bottom:14px">
-        Si ya hiciste pedidos, ingresá tu <b>código</b>, <b>email</b> o <b>teléfono</b>.</p>
-      <div class="field"><label>Código, email o teléfono</label>
-        <input id="inp-cod" placeholder="Ej: AB3X9K · tu@email.com · 351-1234567"
+        Buscá por <b>nombre / razón social</b> (alcanza con una parte), <b>código</b>, <b>email</b> o <b>teléfono</b>.</p>
+      <div class="field"><label>Nombre, código, email o teléfono</label>
+        <input id="inp-cod" placeholder="Ej: cacho · AB3X9K · 351-1234567"
           onkeydown="if(event.key==='Enter')buscarCliente()"></div>
       <div id="bus-alert"></div>
       <button class="btn-primary" id="btn-buscar" onclick="buscarCliente()">Buscar →</button>
@@ -853,6 +853,10 @@ function abrirModalCliente(){
   }
   abrirModal('modal-cliente');
 }
+
+let RESULT_CLIENTES=[];
+function escH(t){return String(t==null?'':t).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]);}
+function elegirCliente(i){const c=RESULT_CLIENTES[i];if(c)ingresarCliente(c,'✓ Cliente: '+c.razon+' ('+c.codigo+')');}
 
 function ingresarCliente(c,msg){
   clienteData={codigo:c.codigo,razon:c.razon,direccion:c.direccion,telefono:c.telefono,email:c.email||''};
@@ -869,8 +873,17 @@ async function buscarCliente(){
   try{
     const r=await fetch(URL_PEDIDOS+'?accion=cliente&q='+encodeURIComponent(q));
     const d=await r.json();
-    if(d.ok){ingresarCliente(d.cliente,'✓ Cliente: '+d.cliente.razon+' ('+d.cliente.codigo+')');return;}
-    al.innerHTML='<div class="alert alert-err">No encontramos ese cliente. Revisá el dato o registralo como nuevo.</div>';
+    if(d.ok && d.cliente){ingresarCliente(d.cliente,'✓ Cliente: '+d.cliente.razon+' ('+d.cliente.codigo+')');return;}
+    if(d.ok && d.lista){
+      RESULT_CLIENTES=d.lista;
+      al.innerHTML=`<div style="font-size:12px;color:var(--g5);margin-bottom:6px">
+          ${d.lista.length===15?'Primeros 15 resultados — escribí más para afinar':'Elegí el cliente:'}</div>`+
+        d.lista.map((c,i)=>`<button class="btn-vendedor-opt" style="text-align:left" onclick="elegirCliente(${i})">
+          ${escH(c.razon)} <span style="font-family:monospace;color:var(--g4);font-size:12px">${escH(c.codigo)}</span>
+          <div style="font-size:12px;font-weight:400;color:var(--g5)">${escH(c.direccion)}</div></button>`).join('');
+    } else {
+      al.innerHTML='<div class="alert alert-err">No encontramos ese cliente. Probá con otra parte del nombre o registralo como nuevo.</div>';
+    }
   }catch(e){
     al.innerHTML='<div class="alert alert-err">Sin conexión. Intentá de nuevo.</div>';
   }
