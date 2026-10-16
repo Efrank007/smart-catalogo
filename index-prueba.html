@@ -378,6 +378,19 @@ input,select{font-family:inherit;font-size:14px}
   </div>
 </div>
 
+<div class="overlay" id="modal-salir">
+  <div class="modal">
+    <div class="modal-hdr"><h2>¿Salir del catálogo?</h2>
+      <button class="modal-close" onclick="cerrarModal('modal-salir')">✕</button></div>
+    <div class="modal-body">
+      <p style="font-size:14px;color:var(--g6);margin-bottom:16px">
+        Tenés un pedido en curso sin enviar. Queda guardado en este teléfono, pero todavía no nos llegó.</p>
+      <button class="btn-primary" onclick="cerrarModal('modal-salir')">Seguir con el pedido</button>
+      <button class="btn-secondary" style="margin-top:10px" onclick="salirDelCatalogo()">Salir igual</button>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="modal-vendedor">
   <div class="modal">
     <div class="modal-hdr">
@@ -409,10 +422,13 @@ let VSTATE = {}; // estado del selector por producto: {sel: índice|null, qty: n
 // ── VENDEDORES ─────────────────────────────────────
 // Los emails de cada vendedor viven en el Apps Script (no se publican en la web)
 const VENDEDORES = {
-  euge:   { nombre: "Eugenio" },
-  angie:  { nombre: "Angeles" },
-  gus:    { nombre: "Gustavo" },
-  marina: { nombre: "Marina" },
+  euge:    { nombre: "Eugenio" },
+  angie:   { nombre: "Angeles" },
+  gus:     { nombre: "Gustavo" },
+  marina:  { nombre: "Marina" },
+  marcelo: { nombre: "Marcelo" },
+  diego:   { nombre: "Diego" },
+  marcela: { nombre: "Marcela" },
 };
 // URL de la aplicación web de Apps Script (central de pedidos)
 const URL_PEDIDOS = "https://script.google.com/macros/s/AKfycbxbrQtcrjrutf5uCTZmem5UlvDzTSGd10yun88L443RqL9boblOIEMiQoi2hsK5eGjYOA/exec";
@@ -432,6 +448,53 @@ function getVendedorActivo(){
 
 let vendedorActivo = getVendedorActivo();
 
+// Modo vendedor: el PIN se valida en el servidor y queda guardado en este dispositivo
+function leerPin(){ try{ return JSON.parse(localStorage.getItem('smart_pin')||'null'); }catch(e){ return null; } }
+function pinActivo(){ const x=leerPin(); return (x && x.v===vendedorActivo) ? x.pin : ''; }
+function esModoVendedor(){ return !!pinActivo(); }
+function salirModoVendedor(){
+  try{localStorage.removeItem('smart_pin');}catch(e){}
+  actualizarBadgeVendedor(); cerrarModal('modal-vendedor'); showToast('Modo vendedor desactivado');
+}
+function abrirPinVendedor(){
+  if(!vendedorActivo){ showToast('Primero elegí tu nombre de vendedor'); return; }
+  document.getElementById('mv-body').innerHTML=`
+    <p style="font-size:13px;color:var(--g5);margin-bottom:12px">
+      Ingresá tu PIN de vendedor (<b>${VENDEDORES[vendedorActivo].nombre}</b>) para buscar clientes por nombre.
+      Queda guardado en este teléfono.</p>
+    <div class="field"><label>PIN</label>
+      <input id="inp-pin" type="password" inputmode="numeric" maxlength="4" autocomplete="off"
+        style="letter-spacing:8px;font-size:22px;text-align:center"
+        onkeydown="if(event.key==='Enter')validarPin()"></div>
+    <div id="pin-alert"></div>
+    <button class="btn-primary" id="btn-pin" onclick="validarPin()">Activar modo vendedor</button>
+    <button class="btn-secondary" onclick="abrirModalVendedor()">← Volver</button>`;
+  abrirModal('modal-vendedor');
+  setTimeout(()=>{const i=document.getElementById('inp-pin');if(i)i.focus();},100);
+}
+async function validarPin(){
+  const pin=(document.getElementById('inp-pin').value||'').trim();
+  const al=document.getElementById('pin-alert');
+  if(!/^\d{4}$/.test(pin)){al.innerHTML='<div class="alert alert-err">El PIN tiene 4 números.</div>';return;}
+  const btn=document.getElementById('btn-pin');
+  btn.disabled=true;btn.innerHTML='<span class="spinner"></span>Verificando...';
+  try{
+    const d=await postScript({accion:'validarPin',vendedor:vendedorActivo,pin});
+    if(!d.ok)throw new Error(d.error||'PIN incorrecto');
+    try{localStorage.setItem('smart_pin',JSON.stringify({v:vendedorActivo,pin}));}catch(e){}
+    actualizarBadgeVendedor(); cerrarModal('modal-vendedor');
+    showToast('🔓 Modo vendedor activado');
+  }catch(e){
+    al.innerHTML='<div class="alert alert-err">'+e.message+'</div>';
+    btn.disabled=false;btn.innerHTML='Activar modo vendedor';
+  }
+}
+async function postScript(obj){
+  const r=await fetch(URL_PEDIDOS,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body:JSON.stringify(obj)});
+  return r.json();
+}
+
 function setVendedor(codigo){
   if (!VENDEDORES[codigo]) return;
   vendedorActivo = codigo;
@@ -444,7 +507,7 @@ function actualizarBadgeVendedor(){
   const el = document.getElementById('vendedor-badge');
   if (!el) return;
   if (vendedorActivo && VENDEDORES[vendedorActivo]) {
-    el.textContent = `Vendedor: ${VENDEDORES[vendedorActivo].nombre} ✎`;
+    el.textContent = (esModoVendedor()?'🔓 ':'Vendedor: ')+`${VENDEDORES[vendedorActivo].nombre} ✎`;
     el.classList.remove('vendedor-badge-warn');
   } else {
     el.textContent = `⚠️ Elegí tu vendedor`;
@@ -455,8 +518,12 @@ function actualizarBadgeVendedor(){
 function abrirModalVendedor(){
   const body = document.getElementById('mv-body');
   body.innerHTML = Object.entries(VENDEDORES).map(([cod, v]) =>
-    `<button class="btn-vendedor-opt" onclick="setVendedor('${cod}')">${v.nombre}</button>`
-  ).join('');
+    `<button class="btn-vendedor-opt" onclick="setVendedor('${cod}')">${v.nombre}${cod===vendedorActivo?' ✓':''}</button>`
+  ).join('') + `<div style="border-top:1px solid var(--g2);margin-top:10px;padding-top:10px">` +
+    (esModoVendedor()
+      ? `<button class="btn-secondary" onclick="salirModoVendedor()">🔓 Modo vendedor activo — desactivar</button>`
+      : `<button class="btn-secondary" onclick="abrirPinVendedor()">🔒 Soy vendedor — ingresar PIN</button>`) +
+    `</div>`;
   abrirModal('modal-vendedor');
 }
 
@@ -468,6 +535,7 @@ let ultimoPedido = null;
 // ── INIT ────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
   cargarCliente();
+  setTimeout(restaurarCarrito,0);
   poblarSelects();
   filtrar();
   actualizarHdr();
@@ -752,7 +820,60 @@ function vaciarCarrito() {
   carrito = {}; actualizarCarrito(); filtrar();
 }
 
+function guardarCarrito(){
+  try{
+    const arr=Object.entries(carrito).map(([k,i])=>({k,c:i.producto.codigo,q:i.cantidad,v:i.variante||null}));
+    if(arr.length) localStorage.setItem('smart_carrito',JSON.stringify({t:Date.now(),arr}));
+    else localStorage.removeItem('smart_carrito');
+  }catch(e){}
+}
+/** Recupera el pedido en curso si la página se cerró (válido 7 días). Usa los precios vigentes. */
+function restaurarCarrito(){
+  try{
+    const x=JSON.parse(localStorage.getItem('smart_carrito')||'null');
+    if(!x||!x.arr||Date.now()-x.t>7*864e5)return;
+    let n=0;
+    x.arr.forEach(({k,c,q,v})=>{
+      const p=PRODUCTOS.find(y=>y.codigo==c);
+      if(p&&q>0){carrito[k]=v?{producto:p,cantidad:q,variante:v}:{producto:p,cantidad:q};n++;}
+    });
+    if(n){actualizarCarrito();filtrar();showToast('🛒 Recuperamos tu pedido en curso ('+n+' artículo'+(n>1?'s':'')+')');}
+  }catch(e){}
+}
+
+// Botón "Atrás" (Android): cierra ventanas abiertas y, si hay un pedido en curso, pide confirmación
+let guardiaAtras=false;
+function armarGuardiaAtras(){
+  if(guardiaAtras)return;
+  try{history.pushState({smart:1},'');guardiaAtras=true;}catch(e){}
+}
+window.addEventListener('popstate',()=>{
+  guardiaAtras=false;
+  const abierto=[...document.querySelectorAll('.overlay.open')];
+  const sb=document.getElementById('sidebar');
+  const sbAbierto=window.innerWidth<=780&&sb&&sb.style.display&&sb.style.display!=='none';
+  if(abierto.length){abierto.forEach(o=>o.classList.remove('open'));armarGuardiaAtras();return;}
+  if(sbAbierto){cerrarSidebarMobile();armarGuardiaAtras();return;}
+  if(Object.keys(carrito).length){armarGuardiaAtras();abrirModal('modal-salir');return;}
+  history.back();
+});
+let saliendo=false;
+window.addEventListener('beforeunload',e=>{
+  if(!saliendo&&Object.keys(carrito).length){e.preventDefault();e.returnValue='';}
+});
+// Chrome solo respeta la guardia si hubo una interacción del usuario
+document.addEventListener('pointerdown',armarGuardiaAtras,{once:true});
+function salirDelCatalogo(){
+  cerrarModal('modal-salir');
+  saliendo=true;
+  history.back();
+  // Si no hay página anterior (se abrió desde un link o acceso directo), intenta cerrar
+  setTimeout(()=>{try{window.close();}catch(e){} saliendo=false;
+    showToast('Podés cerrar la pestaña. Tu pedido queda guardado.');},400);
+}
+
 function actualizarCarrito() {
+  guardarCarrito();
   const entries = Object.entries(carrito);
   const items = entries.map(e=>e[1]);
   const total = items.reduce((s,i)=>s+i.producto.precio*i.cantidad,0);
@@ -835,17 +956,18 @@ function abrirModalCliente(){
         <input id="ed-dir" value="${clienteData.direccion}"></div>
       <div class="field"><label>Teléfono / WhatsApp</label>
         <input id="ed-tel" value="${clienteData.telefono}"></div>
-      <div class="field"><label>Email * (te enviamos el pedido en PDF)</label>
+      <div class="field"><label>Email (te enviamos el pedido en PDF)</label>
         <input id="ed-email" type="email" value="${clienteData.email||''}"></div>
       <button class="btn-primary" onclick="guardarEdicion()">Guardar cambios</button>
       <button class="btn-secondary" onclick="cerrarSesion()">Cambiar de cliente</button>`;
   } else {
     tit.textContent='Identificar cliente';
     body.innerHTML=`
-      <p style="font-size:13px;color:var(--g5);margin-bottom:14px">
-        Buscá por <b>nombre / razón social</b> (alcanza con una parte), <b>código</b>, <b>email</b> o <b>teléfono</b>.</p>
-      <div class="field"><label>Nombre, código, email o teléfono</label>
-        <input id="inp-cod" placeholder="Ej: cacho · AB3X9K · 351-1234567"
+      <p style="font-size:13px;color:var(--g5);margin-bottom:14px">${esModoVendedor()
+        ? '🔓 <b>Modo vendedor:</b> buscá por parte del nombre, código, email o teléfono.'
+        : 'Si ya hiciste pedidos, ingresá tu <b>código</b>, <b>email</b>, <b>teléfono</b> o tu <b>razón social completa</b>.'}</p>
+      <div class="field"><label>${esModoVendedor()?'Nombre, código, email o teléfono':'Código, email, teléfono o razón social'}</label>
+        <input id="inp-cod" placeholder="${esModoVendedor()?'Ej: cacho · AB3X9K · 351-1234567':'Ej: AB3X9K · 351-1234567 · Kiosco Cacho'}"
           onkeydown="if(event.key==='Enter')buscarCliente()"></div>
       <div id="bus-alert"></div>
       <button class="btn-primary" id="btn-buscar" onclick="buscarCliente()">Buscar →</button>
@@ -871,8 +993,7 @@ async function buscarCliente(){
   const btn=document.getElementById('btn-buscar');
   btn.disabled=true;btn.innerHTML='<span class="spinner"></span>Buscando...';
   try{
-    const r=await fetch(URL_PEDIDOS+'?accion=cliente&q='+encodeURIComponent(q));
-    const d=await r.json();
+    const d=await postScript({accion:'buscarCliente',q,vendedor:vendedorActivo||'',pin:pinActivo()});
     if(d.ok && d.cliente){ingresarCliente(d.cliente,'✓ Cliente: '+d.cliente.razon+' ('+d.cliente.codigo+')');return;}
     if(d.ok && d.lista){
       RESULT_CLIENTES=d.lista;
@@ -882,7 +1003,9 @@ async function buscarCliente(){
           ${escH(c.razon)} <span style="font-family:monospace;color:var(--g4);font-size:12px">${escH(c.codigo)}</span>
           <div style="font-size:12px;font-weight:400;color:var(--g5)">${escH(c.direccion)}</div></button>`).join('');
     } else {
-      al.innerHTML='<div class="alert alert-err">No encontramos ese cliente. Probá con otra parte del nombre o registralo como nuevo.</div>';
+      al.innerHTML='<div class="alert alert-err">No encontramos ese cliente. '+(esModoVendedor()
+        ?'Probá con otra parte del nombre o registralo como nuevo.'
+        :'Revisá el dato (la razón social tiene que estar completa) o registrate como nuevo.')+'</div>';
     }
   }catch(e){
     al.innerHTML='<div class="alert alert-err">Sin conexión. Intentá de nuevo.</div>';
@@ -901,6 +1024,10 @@ function mostrarFormDatos(){
       <input id="nw-tel" placeholder="Ej: 351-1234567" type="tel"></div>
     <div class="field"><label>Email * (te enviamos el pedido en PDF)</label>
       <input id="nw-email" placeholder="tu@email.com" type="email"></div>
+      <label style="display:flex;gap:8px;align-items:center;font-size:12px;color:var(--g5);margin:-4px 0 12px">
+        <input type="checkbox" id="nw-email-sinmail" style="width:auto" 
+          onchange="document.getElementById('nw-email').disabled=this.checked;if(this.checked)document.getElementById('nw-email').value=''">
+        El cliente no tiene email</label>
     <div id="form-alert"></div>
     <button class="btn-primary" id="btn-reg" onclick="registrar()">Registrarme y empezar a pedir →</button>
     <button class="btn-secondary" onclick="abrirModalCliente()">← Volver</button>`;
@@ -910,18 +1037,20 @@ async function registrar(){
   const razon=document.getElementById('nw-razon').value.trim();
   const dir=document.getElementById('nw-dir').value.trim();
   const tel=document.getElementById('nw-tel').value.trim();
-  const email=document.getElementById('nw-email').value.trim();
+  const sinMail=document.getElementById('nw-email-sinmail').checked;
+  const email=sinMail?'':document.getElementById('nw-email').value.trim();
   const al=document.getElementById('form-alert');
-  if(!razon||!dir||!tel||!emailOk(email)){
+  if(!razon||!dir||!tel){
     al.innerHTML='<div class="alert alert-err">Completá los campos obligatorios (*)</div>';return;
+  }
+  if(!sinMail&&!emailOk(email)){
+    al.innerHTML='<div class="alert alert-err">Ingresá un email válido o marcá "El cliente no tiene email".</div>';return;
   }
   const btn=document.getElementById('btn-reg');
   btn.disabled=true;btn.innerHTML='<span class="spinner"></span>Registrando...';
   try{
-    const r=await fetch(URL_PEDIDOS,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body:JSON.stringify({accion:'registrarCliente',vendedor:vendedorActivo||'',
-        cliente:{razon,direccion:dir,telefono:tel,email}})});
-    const d=await r.json();
+    const d=await postScript({accion:'registrarCliente',vendedor:vendedorActivo||'',
+        cliente:{razon,direccion:dir,telefono:tel,email}});
     if(!d.ok)throw new Error(d.error||'Error');
     if(d.existente){
       ingresarCliente(d.cliente,'Ese email/teléfono ya estaba registrado: '+d.cliente.razon+' ('+d.cliente.codigo+')');
@@ -939,7 +1068,7 @@ function guardarEdicion(){
   clienteData.direccion=document.getElementById('ed-dir').value.trim();
   clienteData.telefono=document.getElementById('ed-tel').value.trim();
   const em=document.getElementById('ed-email').value.trim();
-  if(!emailOk(em)){showToast('Ingresá un email válido');return;}
+  if(em&&!emailOk(em)){showToast('Ingresá un email válido o dejalo vacío');return;}
   clienteData.email=em;
   guardarCliente();actualizarHdr();cerrarModal('modal-cliente');
   fetch(URL_PEDIDOS,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
@@ -978,7 +1107,12 @@ function abrirModalPedido(){
       <div class="res-total"><span>Total estimado</span><span>${fmt(total)}</span></div>
     </div>
     <div class="field"><label>Email para recibir el pedido en PDF *</label>
-      <input id="ped-email" type="email" value="${clienteData.email||''}" placeholder="tu@email.com"></div>
+      <input id="ped-email" type="email" value="${clienteData.email||''}" placeholder="tu@email.com"
+        ${clienteData.email?'':'disabled'}></div>
+      <label style="display:flex;gap:8px;align-items:center;font-size:12px;color:var(--g5);margin:-4px 0 12px">
+        <input type="checkbox" id="ped-email-sinmail" style="width:auto" ${clienteData.email?'':'checked'}
+          onchange="document.getElementById('ped-email').disabled=this.checked;if(this.checked)document.getElementById('ped-email').value=''">
+        El cliente no tiene email</label>
     <div class="field"><label>Observaciones (opcional)</label>
       <textarea id="obs" placeholder="Fecha de entrega preferida, instrucciones especiales..."></textarea></div>
     <div id="ped-alert"></div>
@@ -999,15 +1133,17 @@ async function enviarPedido(){
   const obs=document.getElementById('obs').value;
   btn.disabled=true;
   btn.innerHTML='<span class="spinner"></span>Enviando...';
-  const emailCli=document.getElementById('ped-email').value.trim();
-  if(!emailOk(emailCli)){
-    alertDiv.innerHTML='<div class="alert alert-err">Ingresá un email válido para recibir el pedido.</div>';
+  const sinMail=document.getElementById('ped-email-sinmail').checked;
+  const emailCli=sinMail?'':document.getElementById('ped-email').value.trim();
+  if(!sinMail&&!emailOk(emailCli)){
+    alertDiv.innerHTML='<div class="alert alert-err">Ingresá un email válido o marcá "El cliente no tiene email".</div>';
     btn.disabled=false;btn.innerHTML='Enviar pedido 📧';return;
   }
   if(emailCli!==clienteData.email){clienteData.email=emailCli;guardarCliente();}
   const fecha=new Date().toLocaleString('es-AR');
   const payload={
     vendedor: vendedorActivo,
+    pin: pinActivo(),
     cliente:{codigo:clienteData.codigo,razon:clienteData.razon,direccion:clienteData.direccion,
              telefono:clienteData.telefono,email:emailCli},
     obs,
@@ -1039,14 +1175,17 @@ async function enviarPedido(){
           <div style="font-size:52px;margin-bottom:12px">✅</div>
           <h3 style="color:var(--green);font-size:19px;margin-bottom:8px">¡Pedido enviado!</h3>
           <p style="color:var(--g5);font-size:13px;margin-bottom:16px">
-            Pedido <strong>${data.pedido}</strong>. Te enviamos el detalle en PDF a
-            <strong>${emailCli}</strong> y tu vendedor te contacta para confirmar.</p>
+            Pedido <strong>${data.pedido}</strong>. ${emailCli
+              ? `Te enviamos el detalle en PDF a <strong>${emailCli}</strong> y tu vendedor te contacta para confirmar.`
+              : `El PDF le llegó a ${VENDEDORES[vendedorActivo].nombre}, que te contacta para confirmar.`}</p>
           <div class="code-box">
             <div class="code">${clienteData.codigo}</div>
             <p>Guardá tu código para el próximo pedido</p>
           </div>
           <button class="btn-primary" style="margin-top:14px" onclick="guardarComprobantePDF()">
             🧾 Guardar comprobante (PDF)</button>
+          <button class="btn-secondary" style="margin-top:10px" onclick="compartirWhatsApp()">
+            💬 Enviar resumen por WhatsApp</button>
           <button class="btn-secondary" style="margin-top:10px"
             onclick="cerrarModal('modal-pedido');cerrarSidebarMobile();filtrar()">Hacer otro pedido</button>
         </div>`;
@@ -1061,11 +1200,21 @@ async function enviarPedido(){
 // ── UTILS ─────────────────────────────────────────────
 function emailOk(e){return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e||'');}
 function fmt(v){
-  // Sin símbolo $ y sin decimales; redondea siempre hacia arriba
-  return Math.ceil(Math.round(Number(v)*100)/100).toLocaleString('es-AR',{maximumFractionDigits:0});
+  // Con símbolo $, sin decimales; redondea siempre hacia arriba
+  return '$ '+Math.ceil(Math.round(Number(v)*100)/100).toLocaleString('es-AR',{maximumFractionDigits:0});
 }
 function abrirModal(id){document.getElementById(id).classList.add('open');}
 function cerrarModal(id){document.getElementById(id).classList.remove('open');}
+
+function compartirWhatsApp(){
+  if(!ultimoPedido)return;
+  const p=ultimoPedido;
+  const txt=`*Pedido S&MART ${p.nro||''}*\n${p.razon}\n\n`+
+    p.items.map(i=>`• ${i.cantidad} x ${i.descripcion} (#${i.codigo}) — ${fmt(i.precio*i.cantidad)}`).join('\n')+
+    `\n\n*Total estimado: ${fmt(p.total)}*`+(p.obs?`\nObs.: ${p.obs}`:'')+
+    `\n\nEl vendedor se comunicará para confirmar disponibilidad y entrega.`;
+  window.open('https://wa.me/?text='+encodeURIComponent(txt),'_blank');
+}
 
 function guardarComprobantePDF(){
   if(!ultimoPedido)return;
