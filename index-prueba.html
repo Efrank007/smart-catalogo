@@ -988,7 +988,7 @@ function abrirModalCliente(){
     body.innerHTML=`
       <div class="code-box">
         <div class="code">${clienteData.codigo}</div>
-        <p>Tu código de cliente — guardalo para próximos pedidos</p>
+        <p>Tu número de cliente — guardalo para próximos pedidos</p>
       </div>
       <div class="field"><label>Razón social / Nombre</label>
         <input id="ed-razon" value="${clienteData.razon}"></div>
@@ -1216,6 +1216,10 @@ async function enviarPedido(){
     try { data = await res.json(); } catch(je) { data = {}; }
     console.log('Central de pedidos:', res.status, JSON.stringify(data));
     data.success = !!data.ok;
+    let codigoNuevo='';
+    if(data.ok && data.codigoCliente && String(data.codigoCliente)!==String(clienteData.codigo)){
+      codigoNuevo=data.codigoCliente; clienteData.codigo=data.codigoCliente; guardarCliente(); actualizarHdr();
+    }
     if(!data.ok && data.error) throw new Error(data.error);
     if(res.ok && data.success){
       ultimoPedido={
@@ -1234,7 +1238,7 @@ async function enviarPedido(){
               : `El PDF le llegó a ${VENDEDORES[vendedorActivo].nombre}, que te contacta para confirmar.`}</p>
           <div class="code-box">
             <div class="code">${clienteData.codigo}</div>
-            <p>Guardá tu código para el próximo pedido</p>
+            <p>${codigoNuevo?'<b>¡Tu nuevo número de cliente!</b> Usalo en tus próximos pedidos':'Guardá tu número de cliente para el próximo pedido'}</p>
           </div>
           <button class="btn-primary" style="margin-top:14px" onclick="guardarComprobantePDF()">
             🧾 Guardar comprobante (PDF)</button>
