@@ -453,24 +453,41 @@ function leerPin(){ try{ return JSON.parse(localStorage.getItem('smart_pin')||'n
 function pinActivo(){ const x=leerPin(); return (x && x.v===vendedorActivo) ? x.pin : ''; }
 function esModoVendedor(){ return !!pinActivo(); }
 function salirModoVendedor(){
-  try{localStorage.removeItem('smart_pin');}catch(e){}
+  try{
+    localStorage.removeItem('smart_pin');
+    // Si el vendedor usó el teléfono de un cliente, vuelve al vendedor que tenía ese cliente
+    const prev=localStorage.getItem('smart_v_prev');
+    localStorage.removeItem('smart_v_prev');
+    if(prev&&VENDEDORES[prev]) fijarVendedor(prev);
+  }catch(e){}
   actualizarBadgeVendedor(); cerrarModal('modal-vendedor'); showToast('Modo vendedor desactivado');
 }
-function abrirPinVendedor(){
-  if(!vendedorActivo){ showToast('Primero elegí tu nombre de vendedor'); return; }
+/** Pantalla de PIN. Con "cod" se ingresa como ese vendedor (puede ser distinto al actual). */
+function abrirPinVendedor(cod){
+  cod = cod || vendedorActivo;
+  if(!cod || !VENDEDORES[cod]){ elegirVendedorParaPin(); return; }
+  PIN_PARA = cod;
   document.getElementById('mv-body').innerHTML=`
     <p style="font-size:13px;color:var(--g5);margin-bottom:12px">
-      Ingresá tu PIN de vendedor (<b>${VENDEDORES[vendedorActivo].nombre}</b>) para buscar clientes por nombre.
-      Queda guardado en este teléfono.</p>
+      Ingresá el PIN de <b>${VENDEDORES[cod].nombre}</b>. Queda guardado en este teléfono.</p>
     <div class="field"><label>PIN</label>
       <input id="inp-pin" type="password" inputmode="numeric" maxlength="4" autocomplete="off"
         style="letter-spacing:8px;font-size:22px;text-align:center"
         onkeydown="if(event.key==='Enter')validarPin()"></div>
     <div id="pin-alert"></div>
-    <button class="btn-primary" id="btn-pin" onclick="validarPin()">Activar modo vendedor</button>
-    <button class="btn-secondary" onclick="abrirModalVendedor()">← Volver</button>`;
+    <button class="btn-primary" id="btn-pin" onclick="validarPin()">Ingresar como ${VENDEDORES[cod].nombre}</button>
+    <button class="btn-secondary" onclick="elegirVendedorParaPin()">← Soy otro vendedor</button>`;
   abrirModal('modal-vendedor');
   setTimeout(()=>{const i=document.getElementById('inp-pin');if(i)i.focus();},100);
+}
+let PIN_PARA = null;
+function elegirVendedorParaPin(){
+  document.getElementById('mv-body').innerHTML=
+    `<p style="font-size:13px;color:var(--g5);margin-bottom:12px">¿Quién sos? Después te pedimos tu PIN.</p>`+
+    Object.entries(VENDEDORES).map(([c,v])=>
+      `<button class="btn-vendedor-opt" onclick="abrirPinVendedor('${c}')">${v.nombre}</button>`).join('')+
+    `<button class="btn-secondary" onclick="abrirModalVendedor()">← Volver</button>`;
+  abrirModal('modal-vendedor');
 }
 async function validarPin(){
   const pin=(document.getElementById('inp-pin').value||'').trim();
@@ -479,14 +496,18 @@ async function validarPin(){
   const btn=document.getElementById('btn-pin');
   btn.disabled=true;btn.innerHTML='<span class="spinner"></span>Verificando...';
   try{
-    const d=await postScript({accion:'validarPin',vendedor:vendedorActivo,pin});
+    const cod=PIN_PARA||vendedorActivo;
+    const d=await postScript({accion:'validarPin',vendedor:cod,pin});
     if(!d.ok)throw new Error(d.error||'PIN incorrecto');
-    try{localStorage.setItem('smart_pin',JSON.stringify({v:vendedorActivo,pin}));}catch(e){}
-    actualizarBadgeVendedor(); cerrarModal('modal-vendedor');
-    showToast('🔓 Modo vendedor activado');
+    try{
+      if(!esModoVendedor()&&vendedorActivo&&vendedorActivo!==cod) localStorage.setItem('smart_v_prev',vendedorActivo);
+      localStorage.setItem('smart_pin',JSON.stringify({v:cod,pin}));
+    }catch(e){}
+    fijarVendedor(cod); cerrarModal('modal-vendedor');
+    showToast('🔓 Modo vendedor: '+VENDEDORES[cod].nombre);
   }catch(e){
     al.innerHTML='<div class="alert alert-err">'+e.message+'</div>';
-    btn.disabled=false;btn.innerHTML='Activar modo vendedor';
+    btn.disabled=false;btn.innerHTML='Ingresar';
   }
 }
 async function postScript(obj){
@@ -495,11 +516,16 @@ async function postScript(obj){
   return r.json();
 }
 
-function setVendedor(codigo){
+function fijarVendedor(codigo){
   if (!VENDEDORES[codigo]) return;
   vendedorActivo = codigo;
-  localStorage.setItem('smart_v2_vendedor', codigo);
+  try{ localStorage.setItem('smart_v2_vendedor', codigo); }catch(e){}
   actualizarBadgeVendedor();
+}
+/** Solo se usa cuando todavía no hay vendedor (se entró sin link). Después queda fijo. */
+function setVendedor(codigo){
+  if (vendedorActivo && !esModoVendedor()) return;
+  fijarVendedor(codigo);
   cerrarModal('modal-vendedor');
 }
 
@@ -507,7 +533,7 @@ function actualizarBadgeVendedor(){
   const el = document.getElementById('vendedor-badge');
   if (!el) return;
   if (vendedorActivo && VENDEDORES[vendedorActivo]) {
-    el.textContent = (esModoVendedor()?'🔓 ':'Vendedor: ')+`${VENDEDORES[vendedorActivo].nombre} ✎`;
+    el.textContent = esModoVendedor() ? `🔓 ${VENDEDORES[vendedorActivo].nombre} ✎` : `Vendedor: ${VENDEDORES[vendedorActivo].nombre}`;
     el.classList.remove('vendedor-badge-warn');
   } else {
     el.textContent = `⚠️ Elegí tu vendedor`;
@@ -517,13 +543,27 @@ function actualizarBadgeVendedor(){
 
 function abrirModalVendedor(){
   const body = document.getElementById('mv-body');
-  body.innerHTML = Object.entries(VENDEDORES).map(([cod, v]) =>
-    `<button class="btn-vendedor-opt" onclick="setVendedor('${cod}')">${v.nombre}${cod===vendedorActivo?' ✓':''}</button>`
-  ).join('') + `<div style="border-top:1px solid var(--g2);margin-top:10px;padding-top:10px">` +
-    (esModoVendedor()
-      ? `<button class="btn-secondary" onclick="salirModoVendedor()">🔓 Modo vendedor activo — desactivar</button>`
-      : `<button class="btn-secondary" onclick="abrirPinVendedor()">🔒 Soy vendedor — ingresar PIN</button>`) +
-    `</div>`;
+  if (!vendedorActivo) {
+    // Entró sin link: elige una única vez
+    body.innerHTML = `<p style="font-size:13px;color:var(--g5);margin-bottom:12px">
+        ¿Quién es tu vendedor? Queda guardado para tus próximos pedidos.</p>` +
+      Object.entries(VENDEDORES).map(([cod, v]) =>
+        `<button class="btn-vendedor-opt" onclick="setVendedor('${cod}')">${v.nombre}</button>`).join('') +
+      `<div style="border-top:1px solid var(--g2);margin-top:10px;padding-top:10px">
+        <button class="btn-secondary" onclick="elegirVendedorParaPin()">🔒 Soy vendedor — ingresar con PIN</button></div>`;
+  } else if (esModoVendedor()) {
+    body.innerHTML = `<p style="font-size:13px;color:var(--g5);margin-bottom:12px">
+        🔓 Estás en <b>modo vendedor</b> como <b>${VENDEDORES[vendedorActivo].nombre}</b>.
+        Los pedidos se registran a tu nombre.</p>
+      <button class="btn-secondary" onclick="elegirVendedorParaPin()">Ingresar como otro vendedor</button>
+      <button class="btn-secondary" style="margin-top:8px" onclick="salirModoVendedor()">Salir del modo vendedor</button>`;
+  } else {
+    body.innerHTML = `<p style="font-size:14px;color:var(--g6);margin-bottom:6px">
+        Tu vendedor es <b>${VENDEDORES[vendedorActivo].nombre}</b>.</p>
+      <p style="font-size:12px;color:var(--g5);margin-bottom:14px">
+        Tus pedidos le llegan directamente. Si necesitás cambiar de vendedor, pedile el link a tu nuevo vendedor.</p>
+      <button class="btn-secondary" onclick="abrirPinVendedor()">🔒 Soy vendedor — ingresar con PIN</button>`;
+  }
   abrirModal('modal-vendedor');
 }
 
