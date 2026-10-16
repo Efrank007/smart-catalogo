@@ -504,7 +504,7 @@ async function validarPin(){
       localStorage.setItem('smart_pin',JSON.stringify({v:cod,pin}));
     }catch(e){}
     fijarVendedor(cod); cerrarModal('modal-vendedor');
-    showToast('🔓 Modo vendedor: '+VENDEDORES[cod].nombre);
+    showToast('✅ Modo vendedor: '+VENDEDORES[cod].nombre);
   }catch(e){
     al.innerHTML='<div class="alert alert-err">'+e.message+'</div>';
     btn.disabled=false;btn.innerHTML='Ingresar';
@@ -533,7 +533,7 @@ function actualizarBadgeVendedor(){
   const el = document.getElementById('vendedor-badge');
   if (!el) return;
   if (vendedorActivo && VENDEDORES[vendedorActivo]) {
-    el.textContent = esModoVendedor() ? `🔓 ${VENDEDORES[vendedorActivo].nombre} ✎` : `Vendedor: ${VENDEDORES[vendedorActivo].nombre}`;
+    el.textContent = esModoVendedor() ? `🟢 ${VENDEDORES[vendedorActivo].nombre} ✎` : `Vendedor: ${VENDEDORES[vendedorActivo].nombre}`;
     el.classList.remove('vendedor-badge-warn');
   } else {
     el.textContent = `⚠️ Elegí tu vendedor`;
@@ -553,7 +553,7 @@ function abrirModalVendedor(){
         <button class="btn-secondary" onclick="elegirVendedorParaPin()">🔒 Soy vendedor — ingresar con PIN</button></div>`;
   } else if (esModoVendedor()) {
     body.innerHTML = `<p style="font-size:13px;color:var(--g5);margin-bottom:12px">
-        🔓 Estás en <b>modo vendedor</b> como <b>${VENDEDORES[vendedorActivo].nombre}</b>.
+        🟢 Estás en <b>modo vendedor</b> como <b>${VENDEDORES[vendedorActivo].nombre}</b>.
         Los pedidos se registran a tu nombre.</p>
       <button class="btn-secondary" onclick="elegirVendedorParaPin()">Ingresar como otro vendedor</button>
       <button class="btn-secondary" style="margin-top:8px" onclick="salirModoVendedor()">Salir del modo vendedor</button>`;
@@ -1004,10 +1004,10 @@ function abrirModalCliente(){
     tit.textContent='Identificar cliente';
     body.innerHTML=`
       <p style="font-size:13px;color:var(--g5);margin-bottom:14px">${esModoVendedor()
-        ? '🔓 <b>Modo vendedor:</b> buscá por parte del nombre, código, email o teléfono.'
+        ? '🟢 <b>Modo vendedor:</b> buscá por parte del nombre, código, email o teléfono.'
         : 'Si ya hiciste pedidos, ingresá tu <b>código</b>, <b>email</b>, <b>teléfono</b> o tu <b>razón social completa</b>.'}</p>
       <div class="field"><label>${esModoVendedor()?'Nombre, código, email o teléfono':'Código, email, teléfono o razón social'}</label>
-        <input id="inp-cod" placeholder="${esModoVendedor()?'Ej: cacho · AB3X9K · 351-1234567':'Ej: AB3X9K · 351-1234567 · Kiosco Cacho'}"
+        <input id="inp-cod" placeholder="${esModoVendedor()?'Ej: cacho · 4821 · 351-1234567':'Ej: 4821 · 351-1234567 · Kiosco Cacho'}"
           onkeydown="if(event.key==='Enter')buscarCliente()"></div>
       <div id="bus-alert"></div>
       <button class="btn-primary" id="btn-buscar" onclick="buscarCliente()">Buscar →</button>
@@ -1017,6 +1017,7 @@ function abrirModalCliente(){
 }
 
 let RESULT_CLIENTES=[];
+let CLIENTE_EXISTENTE=null;
 function escH(t){return String(t==null?'':t).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]);}
 function elegirCliente(i){const c=RESULT_CLIENTES[i];if(c)ingresarCliente(c,'✓ Cliente: '+c.razon+' ('+c.codigo+')');}
 
@@ -1093,7 +1094,20 @@ async function registrar(){
         cliente:{razon,direccion:dir,telefono:tel,email}});
     if(!d.ok)throw new Error(d.error||'Error');
     if(d.existente){
-      ingresarCliente(d.cliente,'Ese email/teléfono ya estaba registrado: '+d.cliente.razon+' ('+d.cliente.codigo+')');
+      // No ingresa automáticamente: muestra quién es y pide confirmación
+      CLIENTE_EXISTENTE=d.cliente;
+      document.getElementById('mc-title').textContent='Cliente ya registrado';
+      document.getElementById('mc-body').innerHTML=`
+        <div class="alert alert-err" style="margin-bottom:12px">
+          Ya existe un cliente con ese <b>${escH(d.coincide||'email/teléfono')}</b>.</div>
+        <div class="code-box" style="margin-bottom:12px">
+          <div style="font-size:16px;font-weight:700;color:var(--navy)">${escH(d.cliente.razon)}</div>
+          <div style="font-size:12px;color:var(--g5);margin-top:3px">Código <b>${escH(d.cliente.codigo)}</b> · ${escH(d.cliente.direccion)}</div>
+        </div>
+        <button class="btn-primary" onclick="ingresarCliente(CLIENTE_EXISTENTE,'✓ Cliente: '+CLIENTE_EXISTENTE.razon)">
+          Continuar como este cliente</button>
+        <button class="btn-secondary" style="margin-top:8px" onclick="mostrarFormDatos()">← Volver y corregir los datos</button>`;
+      return;
     }else{
       ingresarCliente(d.cliente,'✓ Bienvenido '+razon.split(' ')[0]+'! Código: '+d.cliente.codigo);
     }
