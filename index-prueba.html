@@ -430,8 +430,27 @@ const VENDEDORES = {
   diego:   { nombre: "Diego" },
   marcela: { nombre: "Marcela" },
 };
-// URL de la aplicación web de Apps Script (central de pedidos)
-const URL_PEDIDOS = "https://script.google.com/macros/s/AKfycbxbrQtcrjrutf5uCTZmem5UlvDzTSGd10yun88L443RqL9boblOIEMiQoi2hsK5eGjYOA/exec";
+// URL de la aplicación web de Apps Script (central de pedidos).
+// Implementación hecha con la cuenta symartpedidos@gmail.com ("Ejecutar como: Yo").
+// ⚠️ Reemplazar el texto entre comillas por la URL /exec nueva.
+const URL_PEDIDOS = "https://script.google.com/macros/s/AKfycbxfhzMzx6rSi5nIf14IgF9dR4zQUcnxX59XYZMKj4Fpe3LC2Xu1MGf4mBMgTA59rgrO7w/exec";
+// Aviso visible si la central está en modo prueba o mal configurada (no afecta el funcionamiento)
+window.addEventListener('DOMContentLoaded', () => {
+  const aviso = (txt, color) => {
+    const d = document.createElement('div');
+    d.textContent = txt;
+    d.style.cssText = 'position:sticky;top:0;z-index:1000;background:' + color +
+      ';color:#fff;text-align:center;font:600 12px/1.4 sans-serif;padding:6px 10px';
+    document.body.prepend(d);
+  };
+  if (!/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec$/.test(URL_PEDIDOS)) {
+    aviso('Falta configurar la URL de la central de pedidos (URL_PEDIDOS)', '#C0392B'); return;
+  }
+  fetch(URL_PEDIDOS).then(r => r.json()).then(d => {
+    if (d.cuentaCorrecta === false) aviso('Central de pedidos implementada con otra cuenta: los mails NO se envían', '#C0392B');
+    else if (d.modoPrueba) aviso('MODO PRUEBA — los mails van solo a la casilla de pruebas', '#E8540A');
+  }).catch(() => {});
+});
 const DEFAULT_VENDEDOR = "euge";
 
 function getVendedorActivo(){
