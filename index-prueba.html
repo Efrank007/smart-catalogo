@@ -129,6 +129,8 @@ input,select{font-family:inherit;font-size:14px}
 .sb-hdr h3{font-size:14px;font-weight:600}
 .btn-vaciar{font-size:12px;color:var(--red);background:none;border:none;padding:0}
 .btn-vaciar:hover{text-decoration:underline}
+.sb-close{display:none;background:none;border:none;font-size:20px;color:var(--g5);line-height:1;padding:0 0 0 12px}
+.sb-close:hover{color:var(--g7)}
 .sb-items{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:7px}
 .sb-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;
   height:100%;color:var(--g4);gap:8px;text-align:center;padding:20px;font-size:13px}
@@ -165,7 +167,7 @@ input,select{font-family:inherit;font-size:14px}
 .no-results p{font-size:15px}
 
 /* MODALES */
-.overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1150;
   display:none;align-items:center;justify-content:center;padding:16px}
 .overlay.open{display:flex}
 .modal{background:var(--g0);border-radius:16px;width:100%;max-width:480px;
@@ -218,7 +220,7 @@ input,select{font-family:inherit;font-size:14px}
 /* TOAST */
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);
   background:var(--navy);color:#fff;padding:9px 18px;border-radius:99px;font-size:13px;
-  font-weight:500;z-index:1000;transition:transform .25s;white-space:nowrap;
+  font-weight:500;z-index:1200;transition:transform .25s;white-space:nowrap;
   box-shadow:var(--sh-md)}
 .toast.show{transform:translateX(-50%) translateY(0)}
 
@@ -266,6 +268,7 @@ input,select{font-family:inherit;font-size:14px}
 
 @media(max-width:780px){
   .sidebar{display:none}
+  .sb-close{display:block}
   .fab{display:flex}
   .grid{grid-template-columns:repeat(auto-fill,minmax(145px,1fr))}
   .filters{gap:8px}
@@ -286,7 +289,7 @@ input,select{font-family:inherit;font-size:14px}
     <button class="vendedor-badge" id="vendedor-badge" onclick="abrirModalVendedor()"></button>
     <div class="hdr-search">
       <span class="search-ico">🔍</span>
-      <input type="text" id="search" placeholder="Buscar por nombre, código o EAN..." oninput="filtrar()">
+      <input type="text" id="search" placeholder="Buscar por nombre, código o EAN..." oninput="filtrarPronto()">
     </div>
     <div class="hdr-actions">
       <button class="btn-id" id="btn-id" onclick="abrirModalCliente()">
@@ -331,7 +334,10 @@ input,select{font-family:inherit;font-size:14px}
   <aside class="sidebar" id="sidebar">
     <div class="sb-hdr">
       <h3>📦 Mi pedido</h3>
-      <button class="btn-vaciar" onclick="vaciarCarrito()">Vaciar todo</button>
+      <div style="display:flex;align-items:center">
+        <button class="btn-vaciar" onclick="vaciarCarrito()">Vaciar todo</button>
+        <button class="sb-close" onclick="cerrarSidebarMobile()" aria-label="Cerrar pedido">✕</button>
+      </div>
     </div>
     <div class="sb-items" id="sb-items">
       <div class="sb-empty">
@@ -468,7 +474,21 @@ function getVendedorActivo(){
 let vendedorActivo = getVendedorActivo();
 
 // Modo vendedor: el PIN se valida en el servidor y queda guardado en este dispositivo
-function leerPin(){ try{ return JSON.parse(localStorage.getItem('smart_pin')||'null'); }catch(e){ return null; } }
+// por 12 horas (o 30 días si el vendedor marca "es mi teléfono"). Después se vuelve a pedir.
+const PIN_HORAS = 12, PIN_DIAS_PROPIO = 30;
+function leerPin(){
+  try{
+    const x=JSON.parse(localStorage.getItem('smart_pin')||'null');
+    if(x && (!x.vence || Date.now()>x.vence)){ localStorage.removeItem('smart_pin'); return null; }
+    return x;
+  }catch(e){ return null; }
+}
+/** El servidor rechazó el PIN guardado (cambiado o bloqueado): se borra y se avisa. */
+function pinRechazado(msg){
+  try{ localStorage.removeItem('smart_pin'); }catch(e){}
+  actualizarBadgeVendedor();
+  showToast(msg||'Volvé a ingresar tu PIN de vendedor');
+}
 function pinActivo(){ const x=leerPin(); return (x && x.v===vendedorActivo) ? x.pin : ''; }
 function esModoVendedor(){ return !!pinActivo(); }
 function salirModoVendedor(){
@@ -488,11 +508,14 @@ function abrirPinVendedor(cod){
   PIN_PARA = cod;
   document.getElementById('mv-body').innerHTML=`
     <p style="font-size:13px;color:var(--g5);margin-bottom:12px">
-      Ingresá el PIN de <b>${VENDEDORES[cod].nombre}</b>. Queda guardado en este teléfono.</p>
+      Ingresá el PIN de <b>${VENDEDORES[cod].nombre}</b>. Queda activo en este teléfono por ${PIN_HORAS} horas.</p>
     <div class="field"><label>PIN</label>
       <input id="inp-pin" type="password" inputmode="numeric" maxlength="4" autocomplete="off"
         style="letter-spacing:8px;font-size:22px;text-align:center"
         onkeydown="if(event.key==='Enter')validarPin()"></div>
+    <label style="display:flex;gap:8px;align-items:center;font-size:12px;color:var(--g5);margin:-4px 0 12px">
+      <input type="checkbox" id="pin-propio" style="width:auto">
+      Es mi teléfono: recordar ${PIN_DIAS_PROPIO} días</label>
     <div id="pin-alert"></div>
     <button class="btn-primary" id="btn-pin" onclick="validarPin()">Ingresar como ${VENDEDORES[cod].nombre}</button>
     <button class="btn-secondary" onclick="elegirVendedorParaPin()">← Soy otro vendedor</button>`;
@@ -513,20 +536,22 @@ async function validarPin(){
   const al=document.getElementById('pin-alert');
   if(!/^\d{4}$/.test(pin)){al.innerHTML='<div class="alert alert-err">El PIN tiene 4 números.</div>';return;}
   const btn=document.getElementById('btn-pin');
+  const cod=PIN_PARA||vendedorActivo;
   btn.disabled=true;btn.innerHTML='<span class="spinner"></span>Verificando...';
   try{
-    const cod=PIN_PARA||vendedorActivo;
     const d=await postScript({accion:'validarPin',vendedor:cod,pin});
     if(!d.ok)throw new Error(d.error||'PIN incorrecto');
+    const propio=document.getElementById('pin-propio').checked;
+    const vence=Date.now()+(propio?PIN_DIAS_PROPIO*864e5:PIN_HORAS*36e5);
     try{
       if(!esModoVendedor()&&vendedorActivo&&vendedorActivo!==cod) localStorage.setItem('smart_v_prev',vendedorActivo);
-      localStorage.setItem('smart_pin',JSON.stringify({v:cod,pin}));
+      localStorage.setItem('smart_pin',JSON.stringify({v:cod,pin,vence}));
     }catch(e){}
     fijarVendedor(cod); cerrarModal('modal-vendedor');
     showToast('✅ Modo vendedor: '+VENDEDORES[cod].nombre);
   }catch(e){
-    al.innerHTML='<div class="alert alert-err">'+e.message+'</div>';
-    btn.disabled=false;btn.innerHTML='Ingresar';
+    al.innerHTML='<div class="alert alert-err">'+escH(e.message)+'</div>';
+    btn.disabled=false;btn.innerHTML='Ingresar como '+VENDEDORES[cod].nombre;
   }
 }
 async function postScript(obj){
@@ -648,8 +673,13 @@ function limpiarFiltros() {
 }
 
 // ── FILTRAR ──────────────────────────────────────────
+// Minúsculas y sin acentos: "jabon" encuentra "JABÓN"
+function sinAcentos(t){ return String(t||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase(); }
+// Mientras se escribe, espera una pausa corta antes de redibujar los 876 productos
+let filtrarT;
+function filtrarPronto(){ clearTimeout(filtrarT); filtrarT=setTimeout(filtrar,180); }
 function filtrar() {
-  const q = (document.getElementById('search').value || '').toLowerCase().trim();
+  const q = sinAcentos(document.getElementById('search').value).trim();
   const marca = document.getElementById('sel-marca').value;
   const linea = document.getElementById('sel-linea').value;
 
@@ -660,11 +690,11 @@ function filtrar() {
   if (marca) lista = lista.filter(p => p.marca === marca);
   if (linea) lista = lista.filter(p => p.linea === linea);
   if (q) lista = lista.filter(p =>
-    p.descripcion.toLowerCase().includes(q) ||
+    sinAcentos(p.descripcion).includes(q) ||
     p.codigo.toString().includes(q) ||
     (p.ean && p.ean.includes(q)) ||
     (VARIANTES[p.codigo] && VARIANTES[p.codigo].opciones.some(o =>
-      (o.n+' '+o.nombre).toLowerCase().includes(q) || o.cod.includes(q)))
+      sinAcentos(o.n+' '+o.nombre).includes(q) || o.cod.includes(q)))
   );
 
   renderGrid(lista);
@@ -673,7 +703,7 @@ function filtrar() {
   const partes = [];
   if (marca) partes.push(marca);
   if (linea) partes.push(linea);
-  if (q) partes.push(`"${q}"`);
+  if (q) partes.push(`"${escH(q)}"`);
   document.getElementById('meta').innerHTML =
     `<strong>${lista.length}</strong> producto${lista.length!==1?'s':''}`+
     (partes.length ? ` · ${partes.join(' › ')}` : ' · Catálogo completo')+
@@ -693,14 +723,14 @@ function renderGrid(lista) {
     const enC = !!carrito[p.codigo];
     const qty = enC ? carrito[p.codigo].cantidad : 0;
     return `<div class="pcard${enC?' in-cart':''}" id="pc-${p.codigo}">
-      <div class="pcard-marca">${p.marca}</div>
-      <div class="pcard-linea">${p.linea}</div>
+      <div class="pcard-marca">${escH(p.marca)}</div>
+      <div class="pcard-linea">${escH(p.linea)}</div>
       <div class="pcard-img">
-        <img src="fotos/${p.codigo}.jpg" alt="${p.descripcion}"
+        <img src="fotos/${p.codigo}.jpg" alt="${escH(p.descripcion)}"
           onerror="this.parentElement.innerHTML='📦'" loading="lazy">
       </div>
       <div class="pcard-code">#${p.codigo}</div>
-      <div class="pcard-name">${p.descripcion}</div>
+      <div class="pcard-name">${escH(p.descripcion)}</div>
       <div class="pcard-price">${fmt(p.precio)}</div>
       <div class="pcard-uni">Caja × ${p.uni_caja} u.</div>
       <div class="pcard-actions">
@@ -773,14 +803,14 @@ function renderCardVariante(p){
   const V = VARIANTES[p.codigo], st = vstate(p.codigo);
   const {colores} = cantVariantes(p.codigo);
   return `<div class="pcard${colores?' in-cart':''}" id="pc-${p.codigo}">
-      <div class="pcard-marca">${p.marca}</div>
-      <div class="pcard-linea">${p.linea}</div>
+      <div class="pcard-marca">${escH(p.marca)}</div>
+      <div class="pcard-linea">${escH(p.linea)}</div>
       <div class="pcard-img">
-        <img src="fotos/${p.codigo}.jpg" alt="${p.descripcion}"
+        <img src="fotos/${p.codigo}.jpg" alt="${escH(p.descripcion)}"
           onerror="this.parentElement.innerHTML='🎨'" loading="lazy">
       </div>
       <div class="pcard-code">#${p.codigo}</div>
-      <div class="pcard-name">${p.descripcion}<div class="pcard-ncol">${V.opciones.length} colores disponibles</div></div>
+      <div class="pcard-name">${escH(p.descripcion)}<div class="pcard-ncol">${V.opciones.length} colores disponibles</div></div>
       <div class="pcard-price">${fmt(p.precio)}</div>
       <div class="pcard-uni">Caja × ${p.uni_caja} u. · precio por unidad</div>
       <div class="pcard-actions">${htmlAccionesVariante(p.codigo)}</div>
@@ -794,14 +824,14 @@ function htmlAccionesVariante(cod){
     const enC = carrito[cod+'|'+op.n];
     return `<button type="button" class="vsel-opt${i===st.sel?' sel':''}" onclick="elegirVariante('${cod}',${i})">
       <span class="sw" style="background:${op.hex}"></span>
-      <span><b>${op.n}</b> ${op.nombre}</span>
+      <span><b>${escH(op.n)}</b> ${escH(op.nombre)}</span>
       ${enC?`<span class="vq">${enC.cantidad}</span>`:''}
     </button>`;
   }).join('');
   return `<div class="vsel" id="vsel-${cod}">
       <button type="button" class="vsel-btn" onclick="toggleVsel('${cod}',event)">
         ${o?`<span class="sw" style="background:${o.hex}"></span>
-             <span class="vsel-lbl"><b>${o.n}</b> ${o.nombre}</span>`
+             <span class="vsel-lbl"><b>${escH(o.n)}</b> ${escH(o.nombre)}</span>`
            :`<span class="sw empty"></span><span class="vsel-lbl ph">Elegí el ${V.etiqueta.toLowerCase()}</span>`}
         <span class="vsel-car"></span>
       </button>
@@ -951,9 +981,9 @@ function actualizarCarrito() {
   }
   sbI.innerHTML = entries.map(([k,{producto:p,cantidad,variante:v}])=>`
     <div class="cart-item">
-      <div class="ci-name">${p.descripcion}</div>
-      ${v?`<div class="ci-var"><span class="sw" style="background:${v.hex}"></span><span><b>${v.n}</b> ${v.nombre}</span></div>`:''}
-      <div class="ci-meta">#${p.codigo} · ${p.marca}</div>
+      <div class="ci-name">${escH(p.descripcion)}</div>
+      ${v?`<div class="ci-var"><span class="sw" style="background:${v.hex}"></span><span><b>${escH(v.n)}</b> ${escH(v.nombre)}</span></div>`:''}
+      <div class="ci-meta">#${p.codigo} · ${escH(p.marca)}</div>
       <div class="ci-row">
         <button class="ci-qty-btn" onclick="cambiarQty('${k}',-1)">−</button>
         <span class="ci-qty">${cantidad}</span>
@@ -972,8 +1002,9 @@ function toggleSidebar() {
   const sb=document.getElementById('sidebar');
   if(window.innerWidth<=780){
     const open=sb.style.display==='flex';
+    // z-index por encima del aviso de MODO PRUEBA (1000) y por debajo de las ventanas (1150)
     sb.style.cssText=open?'display:none':
-      'display:flex;position:fixed;right:0;top:0;bottom:0;z-index:400;width:300px;box-shadow:-4px 0 20px rgba(0,0,0,.15)';
+      'display:flex;position:fixed;right:0;top:0;bottom:0;z-index:1100;width:300px;max-width:88vw;height:auto;box-shadow:-4px 0 20px rgba(0,0,0,.15)';
   }
 }
 function cerrarSidebarMobile() {
@@ -999,40 +1030,58 @@ function actualizarHdr(){
   }
 }
 
+/** El cliente guardado en el teléfono está autorizado (token) o lo maneja un vendedor con PIN. */
+function clienteAutorizado(){ return !!(clienteData && (clienteData.token || esModoVendedor())); }
+
 function abrirModalCliente(){
   const body=document.getElementById('mc-body');
   const tit=document.getElementById('mc-title');
-  if(clienteData){
+  if(clienteData && clienteAutorizado()){
     tit.textContent='Mis datos';
     body.innerHTML=`
       <div class="code-box">
-        <div class="code">${clienteData.codigo}</div>
+        <div class="code">${escH(clienteData.codigo)}</div>
         <p>Tu número de cliente — guardalo para próximos pedidos</p>
       </div>
       <div class="field"><label>Razón social / Nombre</label>
-        <input id="ed-razon" value="${clienteData.razon}"></div>
+        <input id="ed-razon" value="${escH(clienteData.razon)}"></div>
       <div class="field"><label>Dirección de entrega</label>
-        <input id="ed-dir" value="${clienteData.direccion}"></div>
+        <input id="ed-dir" value="${escH(clienteData.direccion)}"></div>
       <div class="field"><label>Teléfono / WhatsApp</label>
-        <input id="ed-tel" value="${clienteData.telefono}"></div>
+        <input id="ed-tel" value="${escH(clienteData.telefono)}"></div>
       <div class="field"><label>Email (te enviamos el pedido en PDF)</label>
-        <input id="ed-email" type="email" value="${clienteData.email||''}"></div>
-      <button class="btn-primary" onclick="guardarEdicion()">Guardar cambios</button>
+        <input id="ed-email" type="email" value="${escH(clienteData.email||'')}"></div>
+      <div id="ed-alert"></div>
+      <button class="btn-primary" id="btn-ed" onclick="guardarEdicion()">Guardar cambios</button>
       <button class="btn-secondary" onclick="cerrarSesion()">Cambiar de cliente</button>`;
   } else {
-    tit.textContent='Identificar cliente';
-    body.innerHTML=`
-      <p style="font-size:13px;color:var(--g5);margin-bottom:14px">${esModoVendedor()
-        ? '🟢 <b>Modo vendedor:</b> buscá por parte del nombre, código, email o teléfono.'
-        : 'Si ya hiciste pedidos, ingresá tu <b>código</b>, <b>email</b>, <b>teléfono</b> o tu <b>razón social completa</b>.'}</p>
-      <div class="field"><label>${esModoVendedor()?'Nombre, código, email o teléfono':'Código, email, teléfono o razón social'}</label>
-        <input id="inp-cod" placeholder="${esModoVendedor()?'Ej: cacho · 4821 · 351-1234567':'Ej: 4821 · 351-1234567 · Kiosco Cacho'}"
-          onkeydown="if(event.key==='Enter')buscarCliente()"></div>
-      <div id="bus-alert"></div>
-      <button class="btn-primary" id="btn-buscar" onclick="buscarCliente()">Buscar →</button>
-      <button class="btn-secondary" onclick="mostrarFormDatos()">Soy cliente nuevo — registrarme</button>`;
+    formIdentificar(clienteData
+      ? 'Por seguridad, confirmá tu identidad una sola vez con tu código y tu teléfono.' : '',
+      clienteData ? clienteData.codigo : '');
   }
   abrirModal('modal-cliente');
+}
+
+/** Formulario para identificarse. Cliente: dos datos. Vendedor con PIN: búsqueda libre. */
+function formIdentificar(aviso, previo){
+  document.getElementById('mc-title').textContent='Identificar cliente';
+  const vend=esModoVendedor();
+  document.getElementById('mc-body').innerHTML=`
+    ${aviso?`<div class="alert alert-ok">${escH(aviso)}</div>`:''}
+    <p style="font-size:13px;color:var(--g5);margin-bottom:14px">${vend
+      ? '🟢 <b>Modo vendedor:</b> buscá por parte del nombre, código, email o teléfono.'
+      : 'Si ya hiciste pedidos, ingresá tu <b>código</b> (o tu <b>email</b> o tu <b>razón social completa</b>) y tu <b>teléfono</b>.'}</p>
+    <div class="field"><label>${vend?'Nombre, código, email o teléfono':'Código de cliente, email o razón social'}</label>
+      <input id="inp-cod" value="${escH(previo||'')}" placeholder="${vend?'Ej: cacho · 4821 · 351-1234567':'Ej: 0012 · tu@email.com · Kiosco Cacho'}"
+        onkeydown="if(event.key==='Enter')buscarCliente()"></div>
+    ${vend?'':`<div class="field"><label>Teléfono registrado</label>
+      <input id="inp-tel" type="tel" placeholder="Ej: 351-1234567"
+        onkeydown="if(event.key==='Enter')buscarCliente()"></div>`}
+    <div id="bus-alert"></div>
+    <button class="btn-primary" id="btn-buscar" onclick="buscarCliente()">${vend?'Buscar →':'Ingresar →'}</button>
+    <button class="btn-secondary" onclick="mostrarFormDatos()">Soy cliente nuevo — registrarme</button>`;
+  abrirModal('modal-cliente');
+  setTimeout(()=>{const i=document.getElementById(previo&&!vend?'inp-tel':'inp-cod');if(i)i.focus();},100);
 }
 
 let RESULT_CLIENTES=[];
@@ -1041,19 +1090,26 @@ function escH(t){return String(t==null?'':t).replace(/[&<>"']/g,m=>({'&':'&amp;'
 function elegirCliente(i){const c=RESULT_CLIENTES[i];if(c)ingresarCliente(c,'✓ Cliente: '+c.razon+' ('+c.codigo+')');}
 
 function ingresarCliente(c,msg){
-  clienteData={codigo:c.codigo,razon:c.razon,direccion:c.direccion,telefono:c.telefono,email:c.email||''};
+  clienteData={codigo:c.codigo,razon:c.razon,direccion:c.direccion,telefono:c.telefono,email:c.email||'',
+               token:c.token||''};
   guardarCliente();actualizarHdr();cerrarModal('modal-cliente');
   showToast(msg);
 }
 
 async function buscarCliente(){
+  const vend=esModoVendedor();
   const q=(document.getElementById('inp-cod').value||'').trim();
+  const telEl=document.getElementById('inp-tel');
+  const tel=telEl?(telEl.value||'').trim():'';
   const al=document.getElementById('bus-alert');
-  if(!q){al.innerHTML='<div class="alert alert-err">Ingresá un código, email o teléfono.</div>';return;}
+  if(!q){al.innerHTML='<div class="alert alert-err">'+(vend?'Ingresá un nombre, código, email o teléfono.':'Ingresá tu código, email o razón social.')+'</div>';return;}
+  if(!vend&&!tel){al.innerHTML='<div class="alert alert-err">Ingresá también tu teléfono.</div>';return;}
   const btn=document.getElementById('btn-buscar');
+  const txtBtn=btn.innerHTML;
   btn.disabled=true;btn.innerHTML='<span class="spinner"></span>Buscando...';
   try{
-    const d=await postScript({accion:'buscarCliente',q,vendedor:vendedorActivo||'',pin:pinActivo()});
+    const d=await postScript({accion:'buscarCliente',q,tel,vendedor:vendedorActivo||'',pin:pinActivo()});
+    if(d.pinInvalido){pinRechazado(d.error);formIdentificar('',q);return;}
     if(d.ok && d.cliente){ingresarCliente(d.cliente,'✓ Cliente: '+d.cliente.razon+' ('+d.cliente.codigo+')');return;}
     if(d.ok && d.lista){
       RESULT_CLIENTES=d.lista;
@@ -1062,15 +1118,17 @@ async function buscarCliente(){
         d.lista.map((c,i)=>`<button class="btn-vendedor-opt" style="text-align:left" onclick="elegirCliente(${i})">
           ${escH(c.razon)} <span style="font-family:monospace;color:var(--g4);font-size:12px">${escH(c.codigo)}</span>
           <div style="font-size:12px;font-weight:400;color:var(--g5)">${escH(c.direccion)}</div></button>`).join('');
+    } else if(d.error && d.error!=='No encontrado'){
+      al.innerHTML='<div class="alert alert-err">'+escH(d.error)+'</div>';
     } else {
-      al.innerHTML='<div class="alert alert-err">No encontramos ese cliente. '+(esModoVendedor()
+      al.innerHTML='<div class="alert alert-err">No encontramos ese cliente. '+(vend
         ?'Probá con otra parte del nombre o registralo como nuevo.'
-        :'Revisá el dato (la razón social tiene que estar completa) o registrate como nuevo.')+'</div>';
+        :'Revisá los datos (el teléfono tiene que ser el que registraste y la razón social tiene que estar completa) o registrate como nuevo.')+'</div>';
     }
   }catch(e){
     al.innerHTML='<div class="alert alert-err">Sin conexión. Intentá de nuevo.</div>';
   }
-  btn.disabled=false;btn.innerHTML='Buscar →';
+  btn.disabled=false;btn.innerHTML=txtBtn;
 }
 
 function mostrarFormDatos(){
@@ -1080,8 +1138,9 @@ function mostrarFormDatos(){
       <input id="nw-razon" placeholder="Ej: Distribuidora López"></div>
     <div class="field"><label>Dirección de entrega *</label>
       <input id="nw-dir" placeholder="Calle, número, localidad, provincia"></div>
-    <div class="field"><label>Teléfono / WhatsApp *</label>
-      <input id="nw-tel" placeholder="Ej: 351-1234567" type="tel"></div>
+    <div class="field"><label>Teléfono / WhatsApp * (con característica)</label>
+      <input id="nw-tel" placeholder="Ej: 351-1234567" type="tel">
+      <span class="field-hint">Lo vas a usar junto con tu código para identificarte.</span></div>
     <div class="field"><label>Email * (te enviamos el pedido en PDF)</label>
       <input id="nw-email" placeholder="tu@email.com" type="email"></div>
       <label style="display:flex;gap:8px;align-items:center;font-size:12px;color:var(--g5);margin:-4px 0 12px">
@@ -1109,9 +1168,22 @@ async function registrar(){
   const btn=document.getElementById('btn-reg');
   btn.disabled=true;btn.innerHTML='<span class="spinner"></span>Registrando...';
   try{
-    const d=await postScript({accion:'registrarCliente',vendedor:vendedorActivo||'',
+    const d=await postScript({accion:'registrarCliente',vendedor:vendedorActivo||'',pin:pinActivo(),
         cliente:{razon,direccion:dir,telefono:tel,email}});
+    if(d.pinInvalido){pinRechazado(d.error);}
     if(!d.ok)throw new Error(d.error||'Error');
+    if(d.existente && !d.cliente){
+      // Ya está registrado, pero sin la combinación de datos que lo confirma: que se identifique
+      document.getElementById('mc-title').textContent='Cliente ya registrado';
+      document.getElementById('mc-body').innerHTML=`
+        <div class="alert alert-err" style="margin-bottom:12px">
+          Ya hay un cliente registrado con ese <b>${escH(d.coincide||'email/teléfono')}</b>.</div>
+        <p style="font-size:13px;color:var(--g5);margin-bottom:12px">
+          Si sos vos, identificate con tu código (o email) y tu teléfono. Si no lo recordás, pedile ayuda a tu vendedor.</p>
+        <button class="btn-primary" onclick="formIdentificar('',${escH(JSON.stringify(email||''))})">Identificarme</button>
+        <button class="btn-secondary" style="margin-top:8px" onclick="mostrarFormDatos()">← Volver y corregir los datos</button>`;
+      return;
+    }
     if(d.existente){
       // No ingresa automáticamente: muestra quién es y pide confirmación
       CLIENTE_EXISTENTE=d.cliente;
@@ -1131,22 +1203,37 @@ async function registrar(){
       ingresarCliente(d.cliente,'✓ Bienvenido '+razon.split(' ')[0]+'! Código: '+d.cliente.codigo);
     }
   }catch(e){
-    al.innerHTML='<div class="alert alert-err">No se pudo registrar. Revisá tu conexión.<br><small>'+e.message+'</small></div>';
+    al.innerHTML='<div class="alert alert-err">No se pudo registrar. Revisá tu conexión.<br><small>'+escH(e.message)+'</small></div>';
     btn.disabled=false;btn.innerHTML='Registrarme y empezar a pedir →';
   }
 }
 
-function guardarEdicion(){
-  clienteData.razon=document.getElementById('ed-razon').value.trim();
-  clienteData.direccion=document.getElementById('ed-dir').value.trim();
-  clienteData.telefono=document.getElementById('ed-tel').value.trim();
-  const em=document.getElementById('ed-email').value.trim();
-  if(em&&!emailOk(em)){showToast('Ingresá un email válido o dejalo vacío');return;}
-  clienteData.email=em;
-  guardarCliente();actualizarHdr();cerrarModal('modal-cliente');
-  fetch(URL_PEDIDOS,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
-    body:JSON.stringify({accion:'actualizarCliente',cliente:clienteData})}).catch(()=>{});
-  showToast('✓ Datos actualizados');
+/** Guarda primero en la central (verifica token o PIN) y recién después en el teléfono. */
+async function guardarEdicion(){
+  const nuevo={...clienteData,
+    razon:document.getElementById('ed-razon').value.trim(),
+    direccion:document.getElementById('ed-dir').value.trim(),
+    telefono:document.getElementById('ed-tel').value.trim(),
+    email:document.getElementById('ed-email').value.trim()};
+  const al=document.getElementById('ed-alert');
+  if(!nuevo.razon||!nuevo.direccion||!nuevo.telefono){
+    al.innerHTML='<div class="alert alert-err">Razón social, dirección y teléfono son obligatorios.</div>';return;}
+  if(nuevo.email&&!emailOk(nuevo.email)){
+    al.innerHTML='<div class="alert alert-err">Ingresá un email válido o dejalo vacío.</div>';return;}
+  const btn=document.getElementById('btn-ed');
+  btn.disabled=true;btn.innerHTML='<span class="spinner"></span>Guardando...';
+  try{
+    const d=await postScript({accion:'actualizarCliente',cliente:nuevo,vendedor:vendedorActivo||'',pin:pinActivo()});
+    if(d.pinInvalido){pinRechazado(d.error);}
+    if(d.reidentificar){clienteData.token='';guardarCliente();formIdentificar(d.error,clienteData.codigo);return;}
+    if(!d.ok)throw new Error(d.error||'Error');
+    clienteData=nuevo;
+    guardarCliente();actualizarHdr();cerrarModal('modal-cliente');
+    showToast('✓ Datos actualizados');
+  }catch(e){
+    al.innerHTML='<div class="alert alert-err">No se pudieron guardar los cambios. '+escH(e.message)+'</div>';
+    btn.disabled=false;btn.innerHTML='Guardar cambios';
+  }
 }
 
 function cerrarSesion(){
@@ -1160,13 +1247,14 @@ function abrirModalPedido(){
   const items=Object.values(carrito);
   if(!items.length){showToast('El carrito está vacío');return;}
   if(!clienteData){abrirModalCliente();showToast('Primero identificate para confirmar');return;}
+  if(!clienteAutorizado()){abrirModalCliente();return;}
   const total=items.reduce((s,i)=>s+i.producto.precio*i.cantidad,0);
   document.getElementById('mp-body').innerHTML=`
     <div class="code-box" style="margin-bottom:14px">
       <div style="font-size:13px;color:var(--g5)">Pedido de</div>
-      <div style="font-size:17px;font-weight:700;color:var(--navy)">${clienteData.razon}</div>
+      <div style="font-size:17px;font-weight:700;color:var(--navy)">${escH(clienteData.razon)}</div>
       <div style="font-size:12px;color:var(--g4);margin-top:2px">
-        Código: <strong>${clienteData.codigo}</strong> · ${clienteData.direccion}</div>
+        Código: <strong>${escH(clienteData.codigo)}</strong> · ${escH(clienteData.direccion)}</div>
     </div>
     <div style="margin-bottom:14px">
       <div style="font-size:11px;font-weight:600;color:var(--g5);text-transform:uppercase;
@@ -1174,13 +1262,13 @@ function abrirModalPedido(){
       ${items.map(({producto:p,cantidad,variante:v})=>`
         <div class="res-item">
           <span>#${p.codigo} ×${cantidad}</span>
-          <strong>${p.descripcion.substring(0,36)}${p.descripcion.length>36?'…':''}${v?`<br><span style="color:var(--g6);font-weight:600">${VARIANTES[p.codigo].etiqueta} ${textoVariante(v)}</span>`:''}<br>
+          <strong>${escH(p.descripcion.substring(0,36))}${p.descripcion.length>36?'…':''}${v?`<br><span style="color:var(--g6);font-weight:600">${escH(VARIANTES[p.codigo].etiqueta+' '+textoVariante(v))}</span>`:''}<br>
             <span style="color:var(--teal);font-weight:700">${fmt(p.precio*cantidad)}</span></strong>
         </div>`).join('')}
       <div class="res-total"><span>Total estimado</span><span>${fmt(total)}</span></div>
     </div>
     <div class="field"><label>Email para recibir el pedido en PDF *</label>
-      <input id="ped-email" type="email" value="${clienteData.email||''}" placeholder="tu@email.com"
+      <input id="ped-email" type="email" value="${escH(clienteData.email||'')}" placeholder="tu@email.com"
         ${clienteData.email?'':'disabled'}></div>
       <label style="display:flex;gap:8px;align-items:center;font-size:12px;color:var(--g5);margin:-4px 0 12px">
         <input type="checkbox" id="ped-email-sinmail" style="width:auto" ${clienteData.email?'':'checked'}
@@ -1217,8 +1305,10 @@ async function enviarPedido(){
   const payload={
     vendedor: vendedorActivo,
     pin: pinActivo(),
+    idPedido: idPedidoActual(),
+    catalogo: location.pathname.split('/').pop() || 'index.html',
     cliente:{codigo:clienteData.codigo,razon:clienteData.razon,direccion:clienteData.direccion,
-             telefono:clienteData.telefono,email:emailCli},
+             telefono:clienteData.telefono,email:emailCli,token:clienteData.token||''},
     obs,
     items: items.map(({producto:p,cantidad,variante:v})=>({
       codigo:p.codigo, ean:p.ean||'', marca:p.marca||'', linea:p.linea||'',
@@ -1234,6 +1324,13 @@ async function enviarPedido(){
     let data;
     try { data = await res.json(); } catch(je) { data = {}; }
     console.log('Central de pedidos:', res.status, JSON.stringify(data));
+    if(data.pinInvalido){
+      pinRechazado(data.error); cerrarModal('modal-pedido'); abrirModalVendedor(); return;
+    }
+    if(data.reidentificar){
+      clienteData.token=''; guardarCliente(); cerrarModal('modal-pedido');
+      formIdentificar(data.error, clienteData.codigo); return;
+    }
     data.success = !!data.ok;
     let codigoNuevo='';
     if(data.ok && data.codigoCliente && String(data.codigoCliente)!==String(clienteData.codigo)){
@@ -1252,11 +1349,13 @@ async function enviarPedido(){
           <div style="font-size:52px;margin-bottom:12px">✅</div>
           <h3 style="color:var(--green);font-size:19px;margin-bottom:8px">¡Pedido enviado!</h3>
           <p style="color:var(--g5);font-size:13px;margin-bottom:16px">
-            Pedido <strong>${data.pedido}</strong>. ${emailCli
-              ? `Te enviamos el detalle en PDF a <strong>${emailCli}</strong> y tu vendedor te contacta para confirmar.`
+            Pedido <strong>${escH(data.pedido)}</strong>. ${emailCli
+              ? `Te enviamos el detalle en PDF a <strong>${escH(emailCli)}</strong> y tu vendedor te contacta para confirmar.`
               : `El PDF le llegó a ${VENDEDORES[vendedorActivo].nombre}, que te contacta para confirmar.`}</p>
+          ${data.preciosCorregidos?`<div class="alert alert-ok" style="text-align:left">Algunos precios se actualizaron
+            según la lista vigente. El PDF del pedido tiene los precios correctos.</div>`:''}
           <div class="code-box">
-            <div class="code">${clienteData.codigo}</div>
+            <div class="code">${escH(clienteData.codigo)}</div>
             <p>${codigoNuevo?'<b>¡Tu nuevo número de cliente!</b> Usalo en tus próximos pedidos':'Guardá tu número de cliente para el próximo pedido'}</p>
           </div>
           <button class="btn-primary" style="margin-top:14px" onclick="guardarComprobantePDF()">
@@ -1267,14 +1366,30 @@ async function enviarPedido(){
             onclick="cerrarModal('modal-pedido');cerrarSidebarMobile();filtrar()">Hacer otro pedido</button>
         </div>`;
       carrito={};actualizarCarrito();filtrar();cerrarSidebarMobile();
+      try{ localStorage.removeItem('smart_pedido_id'); }catch(e){}
     } else { throw new Error('Error '+res.status); }
   } catch(e){
-    alertDiv.innerHTML=`<div class="alert alert-err">Error al enviar. Revisá tu conexión e intentá de nuevo.<br><small>${e.message}</small></div>`;
+    alertDiv.innerHTML=`<div class="alert alert-err">Error al enviar. Revisá tu conexión e intentá de nuevo.<br><small>${escH(e.message)}</small></div>`;
     btn.disabled=false;btn.innerHTML='Reintentar →';
   }
 }
 
 // ── UTILS ─────────────────────────────────────────────
+/**
+ * Identificador del pedido en curso: si se reintenta el MISMO pedido (mismo cliente y carrito)
+ * se manda el mismo id y la central no lo registra dos veces. Si el carrito cambia, id nuevo.
+ */
+function idPedidoActual(){
+  const firma=JSON.stringify([clienteData&&clienteData.codigo,
+    Object.entries(carrito).map(([k,i])=>[k,i.cantidad]).sort()]);
+  try{
+    const x=JSON.parse(localStorage.getItem('smart_pedido_id')||'null');
+    if(x&&x.firma===firma&&Date.now()-x.t<6*36e5) return x.id;
+  }catch(e){}
+  const id=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,10);
+  try{ localStorage.setItem('smart_pedido_id',JSON.stringify({id,firma,t:Date.now()})); }catch(e){}
+  return id;
+}
 function emailOk(e){return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e||'');}
 function fmt(v){
   // Con símbolo $, sin decimales; redondea siempre hacia arriba
@@ -1304,8 +1419,8 @@ function guardarComprobantePDF(){
   }
   const filas=p.items.map(it=>`
     <tr>
-      <td>#${it.codigo}</td>
-      <td>${it.descripcion}</td>
+      <td>#${escH(it.codigo)}</td>
+      <td>${escH(it.descripcion)}</td>
       <td style="text-align:center">${it.cantidad}</td>
       <td style="text-align:right">${fmt(it.precio)}</td>
       <td style="text-align:right">${fmt(it.precio*it.cantidad)}</td>
@@ -1313,14 +1428,15 @@ function guardarComprobantePDF(){
   el.innerHTML=`
     <div class="cp-header">
       <h1>S&MART — Comprobante de pedido</h1>
-      <span>${p.fecha}</span>
+      <span>${escH(p.fecha)}</span>
     </div>
     <div class="cp-datos">
-      <strong>Código cliente:</strong> ${p.codigo}<br>
-      <strong>Razón social:</strong> ${p.razon}<br>
-      <strong>Dirección:</strong> ${p.direccion}<br>
-      <strong>Teléfono:</strong> ${p.telefono}<br>
-      ${p.email?`<strong>Email:</strong> ${p.email}<br>`:''}
+      ${p.nro?`<strong>Pedido:</strong> ${escH(p.nro)}<br>`:''}
+      <strong>Código cliente:</strong> ${escH(p.codigo)}<br>
+      <strong>Razón social:</strong> ${escH(p.razon)}<br>
+      <strong>Dirección:</strong> ${escH(p.direccion)}<br>
+      <strong>Teléfono:</strong> ${escH(p.telefono)}<br>
+      ${p.email?`<strong>Email:</strong> ${escH(p.email)}<br>`:''}
     </div>
     <table>
       <thead><tr><th>Código</th><th>Producto</th><th style="text-align:center">Cant.</th>
@@ -1328,7 +1444,7 @@ function guardarComprobantePDF(){
       <tbody>${filas}</tbody>
     </table>
     <div class="cp-total">TOTAL ESTIMADO: ${fmt(p.total)}</div>
-    ${p.obs?`<div class="cp-datos" style="margin-top:10px"><strong>Observaciones:</strong> ${p.obs}</div>`:''}
+    ${p.obs?`<div class="cp-datos" style="margin-top:10px"><strong>Observaciones:</strong> ${escH(p.obs)}</div>`:''}
     <div style="margin-top:20px;font-size:11px;color:#98A2B3">
       Este es un comprobante de solicitud de pedido, sujeto a confirmación. No es una factura.</div>`;
   window.print();
