@@ -1135,7 +1135,7 @@ function formIdentificar(aviso, previo){
       ? '🟢 <b>Modo cuenta:</b> buscá por parte del nombre, código, email o teléfono.'
       : 'Si ya hiciste pedidos, ingresá tu <b>código</b> (o tu <b>email</b> o tu <b>nombre y apellido completo</b>) y tu <b>teléfono</b>.'}</p>
     <div class="field"><label>${vend?'Nombre, código, email o teléfono':'Código de cliente, email o nombre y apellido'}</label>
-      <input id="inp-cod" value="${escH(previo||'')}" placeholder="${vend?'Ej: cacho · 4821 · 351-1234567':'Ej: 0012 · tu@email.com · Kiosco Cacho'}"
+      <input id="inp-cod" value="${escH(previo||'')}" placeholder="${vend?'Ej: cacho · 4821 · 351-1234567':'Ej: 0012 · tu@email.com · Juan Pérez'}"
         onkeydown="if(event.key==='Enter')buscarCliente()"></div>
     ${vend?'':`<div class="field"><label>Teléfono registrado</label>
       <input id="inp-tel" type="tel" placeholder="Ej: 351-1234567"
