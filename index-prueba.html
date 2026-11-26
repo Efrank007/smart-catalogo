@@ -633,13 +633,13 @@ function abrirModalVendedor(){
 }
 
 // ── OFERTAS Y COMPRA MÍNIMA ────────────────────────
-const MINIMO_COMPRA = 20000;
+const MINIMO_COMPRA = 25000;
 const OFERTAS = new Set(OFERTAS_LISTA.map(String));
 let soloOfertas = false;
 function cintaOferta(cod){ return OFERTAS.has(String(cod)) ? '<div class="ribbon-wrap"><span class="ribbon-oferta">OFERTA</span></div>' : ''; }
 function toggleOfertas(){ soloOfertas=!soloOfertas; filtrar(); }
 function totalCarrito(){ return Object.values(carrito).reduce((s,i)=>s+i.producto.precio*i.cantidad,0); }
-function textoMinimoBarra(){ return '🛒 Compra mínima: <b>'+fmt(MINIMO_COMPRA)+'</b>'; }
+function textoMinimoBarra(){ return '🚚 <b>Envío gratis</b> · 🛒 Compra mínima: <b>'+fmt(MINIMO_COMPRA)+'</b>'; }
 function actualizarMinimo(total){
   const bar=document.getElementById('minimo-bar'); if(bar) bar.innerHTML=textoMinimoBarra();
   const el=document.getElementById('sb-min'), btn=document.getElementById('btn-confirmar');
@@ -647,10 +647,10 @@ function actualizarMinimo(total){
   const falta=MINIMO_COMPRA-total;
   if(falta>0){
     el.className='sb-min falta';
-    el.innerHTML='Compra mínima '+fmt(MINIMO_COMPRA)+' · te faltan <b>'+fmt(falta)+'</b>';
+    el.innerHTML='Compra mínima '+fmt(MINIMO_COMPRA)+' (envío gratis) · te faltan <b>'+fmt(falta)+'</b>';
     btn.disabled=true;
   } else {
-    el.className='sb-min ok'; el.innerHTML='✓ Superaste la compra mínima de '+fmt(MINIMO_COMPRA);
+    el.className='sb-min ok'; el.innerHTML='✓ Superaste la compra mínima de '+fmt(MINIMO_COMPRA)+' · 🚚 Envío gratis';
     btn.disabled=false;
   }
 }
